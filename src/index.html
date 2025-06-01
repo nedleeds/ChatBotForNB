@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>챗봇</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <h1>🤖 신입사원 교육 용 챗봇</h1>
+
+      <input type="file" id="fileInput" accept=".csv, .xlsx" style="display:none" />
+
+      <!-- 사용자에게 보여줄 버튼 -->
+      <button id="fileTriggerBtn">📂 파일을 업로드하세요</button>
+      
+      <!-- 상태 텍스트 -->
+      <span id="fileStatus"></span>
+
+    </header>      
+    <main>
+      <div id="chatBox">
+        <!-- 챗봇 대화 내용이 여기에 출력됨 -->
+      </div>
+      <div class="chat-input-area">
+        <input type="text" id="questionInput" placeholder="질문을 입력하세요..." />
+        <button id="sendBtn">전송</button>
+      </div>
+    </main>
+
+    <footer>
+      <span>🧠 ChatGPT API 기반 챗봇</span>
+    </footer>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "chatbot",
+  "version": "1.0.0",
+  "description": "신입사원 교육용 챗봇",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"npm run backend\" \"npm run electron\"",
+    "electron": "electron .",
+    "backend": "cd backend && python app.py"
+  },
+  "author": "donghyeong lee",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^29.4.6"
+  },
+  "keywords": [],
+  "type": "commonjs"
+}
