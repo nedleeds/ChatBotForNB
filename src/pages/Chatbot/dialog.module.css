@@ -1,0 +1,412 @@
+/* src/pages/Chatbot/dialog.module.css */
+
+/* ────────────────────────────────────────────────────────────────────────────
+   1. 공통 변수
+──────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg-dark: #181a1b;
+  --bg-header: #202224;
+  --bg-input: #202224;
+  /* 수정: 입력창 배경을 헤더와 동일하게끔 미리 설정 */
+  --bg-bubble-user: #1f6feb;
+  --bg-bubble-bot: #383a3c;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --border-light: #2e2f30;
+  --accent-blue: #0077cc;
+  --accent-gray: #3a3c3e;
+  --radius-base: 12px;
+  --font-sans: 'Noto Sans KR', sans-serif;
+  --font-size-base: 14px;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   2. 전체 컨테이너 (DialogPage)
+──────────────────────────────────────────────────────────────────────────── */
+.container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 4px);
+  /* ChatbotPage에서 내려준 전체 높이(100%)에서
+     상하 2px씩 총 4px 마진을 뺀 높이 */
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  margin: 2px;
+  /* 부모에서 완전히 가득 찬 상태에서 2px만 남음 */
+  border-radius: var(--radius-base);
+  overflow: hidden;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   3. 상단 바 (Header)
+──────────────────────────────────────────────────────────────────────────── */
+.header {
+  background-color: var(--bg-header);
+  padding: 0 16px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.homeButton {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  margin-right: 12px;
+  outline: none;
+  transition: color 0.2s;
+}
+
+.homeButton:hover {
+  color: var(--text-primary);
+}
+
+.headerTitle {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-right: auto;
+}
+
+.headerMeta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  margin-left: 12px;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   4. 채팅 메시지 목록 (Chat List)
+   - flex: 1로 설정해, 헤더와 입력창을 제외한 공간을 고정 높이로 차지
+   - 내부 스크롤(overflow-y: auto)만 동작하도록 함
+──────────────────────────────────────────────────────────────────────────── */
+.chatList {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* 각 채팅 메시지 래퍼 */
+.chatMessage {
+  margin: 8px 0;
+  display: flex;
+}
+
+/* 사용자 말풍선 */
+.userBubble {
+  margin-left: auto;
+  background-color: var(--bg-bubble-user);
+  color: var(--text-primary);
+  padding: 12px 18px;
+  border-radius: var(--radius-base) var(--radius-base) 0 var(--radius-base);
+  max-width: 70%;
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  /* 줄바꿈 문자를 그대로 렌더링 */
+  word-break: break-word;
+  /* 긴 단어가 영역을 벗어나지 않도록 줄바꿈 */
+  overflow-wrap: break-word;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  /* 살짝 그림자 추가 */
+}
+
+/* 봇 말풍선 */
+.botBubble {
+  margin-right: auto;
+  background-color: var(--bg-bubble-bot);
+  color: var(--text-primary);
+  padding: 12px 18px;
+  border-radius: var(--radius-base) var(--radius-base) var(--radius-base) 0;
+  max-width: 70%;
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   5. 입력창 + 버튼 영역 (Input Area)
+   - flex-shrink: 0으로 높이를 고정
+   - 대화 영역과 구분 없이 헤더 배경색과 동일하게 통일
+   - 상단 경계선만 살짝 구분될 정도로 색상 차이 둠
+──────────────────────────────────────────────────────────────────────────── */
+.inputArea {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  background-color: var(--bg-input) !important;
+  /* 헤더 배경색(#202224)과 완전히 매치되도록 !important 추가 */
+  border-top: 1px solid #2c2c2c !important;
+  /* 경계선도 헤더 바로 아래(#2c2c2c) 색상으로 매치 */
+  flex-shrink: 0;
+}
+
+.inputField {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: var(--font-size-base);
+  border-radius: var(--radius-base);
+  border: 1px solid #2c2c2c !important;
+  /* 테두리도 헤더과 동일한 색상으로 맞추기 위해 !important 추가 */
+  background-color: var(--bg-input) !important;
+  /* 입력창 배경도 헤더(#202224)과 동일하게 매치 */
+  color: var(--text-primary);
+  outline: none;
+  margin-right: 12px;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.inputField::placeholder {
+  color: var(--text-secondary);
+}
+
+.inputField:focus {
+  border-color: var(--accent-blue) !important;
+  /* 포커스 시 파란 테두리 (강제 처리) */
+  background-color: #2a2c2e !important;
+  /* 포커스 시 미세하게 밝은 톤으로 변경 */
+}
+
+/* 전송 버튼 */
+.sendButton {
+  padding: 10px 16px;
+  background-color: #28a745;
+  /* 녹색 강조 색 */
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.sendButton:hover {
+  background-color: #218838;
+  /* 호버 시 진한 녹색 */
+  transform: translateY(-1px);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   6. 말풍선 내 타이핑 인디케이터 (Typing Dots)
+──────────────────────────────────────────────────────────────────────────── */
+.typingIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 1em;
+  /* 말풍선 높이에 맞춰 조정 */
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  background-color: var(--text-primary);
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: blink 1.5s infinite ease-in-out both;
+}
+
+.dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.5s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 1.0s;
+}
+
+@keyframes blink {
+
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+  }
+
+  30% {
+    opacity: 1;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   7. 전체 정보보기 버튼 (Retrieval) 관련 (DialogPage 내부에서 사용)
+──────────────────────────────────────────────────────────────────────────── */
+.infoButton {
+  padding: 10px 16px;
+  background-color: var(--accent-gray);
+  /* 회색 계열로 강조 */
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  margin-right: 12px;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.infoButton:hover {
+  background-color: #4a4c4e;
+  /* 호버 시 진한 회색 */
+  transform: translateY(-1px);
+}
+
+/* 비활성화 상태 */
+.infoButtonDisabled {
+  background-color: var(--border-light);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   8. RetrievalPanel (사이드바) 수정된 부분
+   - 절대 위치(position: absolute)를 제거하고 flex 기반 배치로 변경
+   - 새로운 .contentWrapper와 .chatWrapper 클래스를 추가
+──────────────────────────────────────────────────────────────────────────── */
+
+/* 헤더 바로 아래 “콘텐츠 영역”을 가로(flex-row)로 배치 */
+.contentWrapper {
+  flex: 1;
+  /* 헤더를 제외한 나머지 높이를 모두 차지 */
+  display: flex;
+  /* 좌/우 패널을 나란히 배치 */
+  flex-direction: row;
+  width: 100%;
+  position: relative;
+}
+
+/* 좌측: 채팅 메시지 목록과 입력창을 세로로 묶는 래퍼 */
+.chatWrapper {
+  flex: 1;
+  /* 우측 RetrievalPanel이 나타나면 자동으로 너비가 줄어들고, 사라지면 전체를 차지 */
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-dark);
+}
+
+/* 우측: Retrieval 패널 */
+.retrievalPanel {
+  width: 40%;
+  /* 고정 너비 (원하는 크기로 조정 가능) */
+  flex-shrink: 0;
+  /* 절대로 줄어들지 않도록 */
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-header);
+  border-left: 1px solid var(--border-light);
+  /* 높이는 contentWrapper가 이미 flex:1이라서, 따로 flex 속성을 주지 않아도 header를 제외한 높이를 꽉 채웁니다 */
+}
+
+/* Retrieval 패널 헤더 */
+.retrievalHeader {
+  flex-shrink: 0;
+  height: 50px;
+  /* 고정 높이 */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-light);
+  background-color: #1e1e1e;
+}
+
+/* Retrieval 헤더 제목 */
+.retrievalHeaderTitle {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+/* Retrieval 닫기 버튼 */
+.retrievalCloseButton {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s;
+}
+
+.retrievalCloseButton:hover {
+  color: var(--text-primary);
+}
+
+/* Retrieval 패널 본문 */
+.retrievalContent {
+  flex: 1;
+  /* header를 제외한 나머지 높이를 모두 차지 */
+  overflow-y: auto;
+  padding: 12px;
+}
+
+/* Retrieval 항목(페이지 썸네일 + 텍스트) */
+.retrievalItem {
+  margin-bottom: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-base);
+  overflow: hidden;
+  cursor: pointer;
+  background-color: var(--bg-input);
+  transition: background 0.2s;
+}
+
+.retrievalItem:hover {
+  background-color: #2e3032;
+}
+
+/* Retrieval 항목 헤더(페이지 번호/점수 등) */
+.retrievalItemHeader {
+  padding: 6px 10px;
+  background-color: var(--accent-gray);
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+}
+
+/* 썸네일 영역 */
+.thumbnailContainer {
+  padding: 8px;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   9. 스크롤바 커스텀 (Webkit 전용)
+──────────────────────────────────────────────────────────────────────────── */
+.chatList::-webkit-scrollbar,
+.retrievalContent::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chatList::-webkit-scrollbar-thumb,
+.retrievalContent::-webkit-scrollbar-thumb {
+  background-color: #555;
+  border-radius: 3px;
+}
+
+.chatList::-webkit-scrollbar-track,
+.retrievalContent::-webkit-scrollbar-track {
+  background-color: var(--bg-dark);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   10. 전반적인 애니메이션 & 트랜지션
+──────────────────────────────────────────────────────────────────────────── */
+button {
+  transition: background 0.2s, color 0.2s, transform 0.1s;
+}

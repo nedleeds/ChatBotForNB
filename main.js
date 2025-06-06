@@ -312,18 +312,18 @@ ipcMain.handle(
 );
 
 // 7-3. 챗봇 불러오기 요청
-ipcMain.handle('chatbot:load', async (event, { name }) => {
-  try {
-    const list = await readChatbotList();
-    const meta = list.find((c) => c.name === name);
-    if (!meta) throw new Error('해당 챗봇 정보를 찾을 수 없습니다.');
+ipcMain.handle('chatbot:load', async (event, { company, team, part, name }) => {
+  // 메타 조회 없이 무조건 성공만 반환
+  return { success: true };
+});
 
-    // TODO: 실제 챗봇 로드 로직(예: 메모리나 백엔드에서 모델 초기화 등)
-    return { success: true, chatbot: meta };
-  } catch (err) {
-    console.error('❌ 챗봇 불러오기 중 오류:', err);
-    return { success: false, error: err.message };
-  }
+// ────────────────────────────────────────────────────────────────────────────
+// Renderer(React) 코드에서 `window.electronAPI.loadChatbot({ company, team, part, chatbotName })`
+// 형태로 호출하면 이 핸들러가 실행됩니다.
+ipcMain.handle('loadChatbot', (event, args) => {
+  // args: { company, team, part, chatbotName }
+  const { company, team, part, chatbotName: name } = args;
+  return ipcMain.invoke('chatbot:load', { company, team, part, name });
 });
 
 // 7-4. 챗봇 재학습 요청
