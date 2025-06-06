@@ -1,9 +1,8 @@
 # utils/pdf.py
-
 import os
-import fitz  # PyMuPDF
-from typing import List
 
+from typing import List
+from pdf2image import convert_from_path
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_core.documents.base import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -26,10 +25,7 @@ def pdf_to_documents(pdf_path: str) -> List[Document]:
     raw_page_docs = loader.load()  # 기본적으로 페이지 단위 Document 리스트
 
     # 2) 텍스트 청크 크기/오버랩 설정 (한글 기준 약 800자 ↔ 약 400~450토큰)
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=700,
-        chunk_overlap=200
-    )
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=200)
 
     docs: List[Document] = []
     for page_doc in raw_page_docs:
@@ -49,20 +45,34 @@ def pdf_to_documents(pdf_path: str) -> List[Document]:
 
 
 # (3) PDF → 페이지별 이미지 변환 (변경 없음)
-def convert_pdf_to_images(pdf_path: str, dpi: int = 250) -> List[str]:
-    doc = fitz.open(pdf_path)
-    output_folder = os.path.join(os.path.dirname(__file__), "../data/pdf2img")
-    os.makedirs(output_folder, exist_ok=True)
+#
+def convert_pdf_to_images(pdf_path: str, output_dir: str) -> List[str]:
+    """
+    PDF 파일을 페이지별로 PNG 이미지로 변환하여 output_dir 에 저장합니다.
+    - pdf_path: 변환할 PDF 파일 경로
+    - output_dir: 변환된 이미지가 저장될 디렉터리
+    반환값: 생성된 이미지 파일 경로 리스트 (예: [".../page_1.png", "…/page_2.png", ...])
+    """
 
-    image_paths = []
-    pdf_basename = os.path.splitext(os.path.basename(pdf_path))[0]
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        zoom = dpi / 72
-        mat = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=mat)
-        image_filename = f"{pdf_basename}_page_{page_num + 1}.png"
-        image_path = os.path.join(output_folder, image_filename)
-        pix.save(image_path)
-        image_paths.append(image_path)
-    return image_paths
+    if not os.path.isfile(pdf_path):
+        raise FileNotFoundError(f"PDF 파일을 찾을 수 없습니다: {pdf_path}")
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # DPI 고정 (정수)
+    dpi = 450
+
+    # pdf2image의 convert_from_path를 사용해 페이지별 PIL.Image 리스트 생성
+    images = convert_from_path(pdf_path, dpi=dpi)
+
+    saved_paths: List[str] = []
+    for idx, img in enumerate(images):
+        page_no = idx + 1
+        img_filename = f"page_{page_no}.png"
+        img_path = os.path.join(output_dir, img_filename)
+
+        # PIL Image 객체를 PNG로 저장
+        img.save(img_path, "PNG")
+        saved_paths.append(img_path)
+
+    return saved_paths

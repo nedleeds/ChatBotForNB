@@ -72,6 +72,7 @@ export default function DialogPage(props) {
       if (window.electronAPI && typeof window.electronAPI.getUploadedPdfPath === 'function') {
         try {
           const path = await window.electronAPI.getUploadedPdfPath();
+          console.log('◀ Electron에서 가져온 PDF 경로:', path);
           setPdfFile(path);
         } catch (err) {
           console.error('PDF 경로 가져오는 중 오류:', err);
@@ -102,6 +103,15 @@ export default function DialogPage(props) {
         content: msg.text,
       }));
 
+      console.log('▶ 프론트에서 보낼 데이터:', {
+        company,
+        team,
+        part,
+        chatbot_name: chatbotName,
+        question,
+        chat_history
+      });
+
       const res = await axios.post(
         'http://localhost:8088/chat',
         {
@@ -114,6 +124,8 @@ export default function DialogPage(props) {
         },
         { headers: { 'Content-Type': 'application/json' } }
       );
+
+      console.log('◀ 백엔드 응답(res.data):', res.data);
 
       const { answer, sources } = res.data;
 
@@ -155,8 +167,26 @@ export default function DialogPage(props) {
     }
   };
 
+  // ── (Retrieval 부분만 수정) ──
+
+  // 페이지 인덱스를 기반으로 StaticFiles URL 생성
+  const getStaticImageUrl = (pageIndex) => {
+    // encodeURIComponent를 이용해 챗봇 이름(경로)에 한글/공백이 있을 때 인코딩
+    const encodedName = encodeURIComponent(chatbotName);
+    // StaticFiles에서 서빙하는 URL 경로는 "/static/{company}/{team}/{part}/{chatbotName}/images/page_{n}.png"
+    const relPath = `${company}/${team}/${part}/${encodedName}/images/page_${pageIndex + 1}.png`;
+    return `/static/${relPath.replace(/\\/g, '/')}`; // Windows의 \\를 /로 바꿔줍니다.
+  };
+
   return (
-    <div className={styles.container}>
+    /**
+     * 1) container → 화면 전체 높이를 채우도록 height:100vh 설정
+     * 2) display:flex, flexDirection:column 으로 헤더+콘텐츠 영역 배치
+     */
+    <div
+      className={styles.container}
+      style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
+    >
       {/* ── 상단 바(Header) ── */}
       <div className={styles.header}>
         <div className={styles.headerRow}>
@@ -189,24 +219,43 @@ export default function DialogPage(props) {
       </div>
 
       {/* ── 콘텐츠 영역: 채팅 + Retrieval ── */}
-      <div className={styles.contentWrapper}>
-        {/* 좌측 채팅 래퍼 */}
-        <div className={styles.chatWrapper}>
-          {/* ── 채팅 메시지 목록 ── */}
-          <div className={styles.chatList}>
+      {/**
+       * contentWrapper: 
+       *   - flex:1 → 헤더를 제외한 남은 공간 전체를 채움
+       *   - display:flex, flexDirection:row → 좌우 패널 나란히
+       *   - overflow:hidden → 자식이 넘칠 때 내부에서 처리
+       */}
+      <div
+        className={styles.contentWrapper}
+        style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
+      >
+        {/* ── 좌측 채팅 래퍼: flex:1, column 배치 ── */}
+        <div
+          className={styles.chatWrapper}
+          style={{ display: 'flex', flexDirection: 'column', flex: 1 }}
+        >
+          {/* ── 채팅 메시지 목록 (스크롤 가능) ── */}
+          <div
+            className={styles.chatList}
+            style={{ flex: 1, overflowY: 'auto' }}
+          >
             {messages.map((msg, idx) => (
               <div
                 key={idx}
                 className={styles.chatMessage}
                 style={{ textAlign: msg.from === 'user' ? 'right' : 'left' }}
               >
-                <span className={msg.from === 'user' ? styles.userBubble : styles.botBubble}>
+                <span
+                  className={
+                    msg.from === 'user' ? styles.userBubble : styles.botBubble
+                  }
+                >
                   {msg.text}
                 </span>
               </div>
             ))}
 
-            {/* ── 봇 타이핑 인디케이터 (좌측) ── */}
+            {/* 봇 타이핑 인디케이터 (좌측) */}
             {isTyping && (
               <div className={styles.chatMessage} style={{ textAlign: 'left' }}>
                 <span className={styles.botBubble}>
@@ -219,7 +268,7 @@ export default function DialogPage(props) {
               </div>
             )}
 
-            {/* ── 사용자 타이핑 인디케이터 (우측) ── */}
+            {/* 사용자 타이핑 인디케이터 (우측) */}
             {input.trim() !== '' && (
               <div className={styles.chatMessage} style={{ textAlign: 'right' }}>
                 <span className={styles.userBubble}>
@@ -233,8 +282,8 @@ export default function DialogPage(props) {
             )}
           </div>
 
-          {/* ── 입력창 + 버튼 영역(Input Area) ── */}
-          <div className={styles.inputArea}>
+          {/* ── 입력창 + 버튼 영역(Input Area): flexShrink:0 고정 ── */}
+          <div className={styles.inputArea} style={{ flexShrink: 0 }}>
             <input
               value={input}
               onChange={e => setInput(e.target.value)}
@@ -252,18 +301,19 @@ export default function DialogPage(props) {
               정보보기
             </button>
 
-            <button
-              className={styles.sendButton}
-              onClick={handleSend}
-            >
+            <button className={styles.sendButton} onClick={handleSend}>
               전송
             </button>
           </div>
         </div>
 
-        {/* 우측 Retrieval 패널 */}
+        {/* ── 우측 Retrieval 패널 ── */}
         {showRetrieval && lastMetadata && (
-          <div className={styles.retrievalPanel}>
+          <div
+            className={styles.retrievalPanel}
+            style={{ display: 'flex', flexDirection: 'column', width: '40%' }}
+          >
+            {/* Retrieval Header */}
             <div className={styles.retrievalHeader}>
               <h3 className={styles.retrievalHeaderTitle}>Retrieval 정보</h3>
               <button
@@ -274,8 +324,19 @@ export default function DialogPage(props) {
                 ×
               </button>
             </div>
-            <div className={styles.retrievalContent}>
-              {pdfFile ? (
+            {/* Retrieval Content: flex:1, overflowY:auto 으로 스크롤 */}
+            <div
+              className={styles.retrievalContent}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+              }}
+            >
+              {lastMetadata.pages.length === 0 ? (
+                <p style={{ color: '#e0e0e0', padding: '8px' }}>
+                  Retrieval 데이터가 없습니다.
+                </p>
+              ) : (
                 lastMetadata.pages.map((pg, idx) => (
                   <div
                     key={idx}
@@ -293,19 +354,19 @@ export default function DialogPage(props) {
                       페이지 {pg + 1} ({(lastMetadata.scores[idx] * 100).toFixed(1)}%)
                     </div>
                     <div className={styles.thumbnailContainer}>
-                      <Document file={pdfFile}>
-                        <Page
-                          pageNumber={pg + 1}
-                          width={250}
-                          renderTextLayer={false}
-                          renderAnnotationLayer={false}
-                        />
-                      </Document>
+                      {/* StaticFiles로 서빙된 이미지를 img로 가져오기 */}
                     </div>
+                   <img
+                      src={`http://localhost:8088${getStaticImageUrl(pg)}`}
+                      alt={`Page ${pg + 1}`}
+                      style={{
+                        width: '100%',    // → 카드 가로 폭에 꽉 차도록 변경
+                        height: 'auto',   // → 종횡비 유지
+                        borderRadius: '4px'
+                      }}
+                    />
                   </div>
                 ))
-              ) : (
-                <p style={{ color: '#e0e0e0', padding: '8px' }}>PDF 파일을 불러오는 중...</p>
               )}
             </div>
           </div>

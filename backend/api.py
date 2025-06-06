@@ -6,9 +6,10 @@ from typing import List, Dict, Any
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from utils.pdf import save_uploadedfile, pdf_to_documents, convert_pdf_to_images
+from utils.pdf import pdf_to_documents, convert_pdf_to_images
 from utils.embedding import build_vector_store
 from utils.rag import process_question
 
@@ -22,9 +23,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount(
+    "/static",
+    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "data")),
+    name="static",
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# (2) 학습된 챗봇 목록 조회 엔드포인트 (신규 추가)
+# (2) 학습된 챗봇 목록 조회 엔드포인트
 @app.get("/chatbots", response_model=List[Dict[str, Any]])
 async def list_chatbots(company: str, team: str, part: str):
     """
@@ -32,7 +38,6 @@ async def list_chatbots(company: str, team: str, part: str):
     각 챗봇 폴더 내에 'faiss_index' 디렉토리가 존재하면 '학습된 챗봇'으로 간주하고
     [{"name", "company", "team", "part", "indexPath", "createdAt", "lastTrainedAt"}, …] 형태로 반환.
     """
-
     base_data_dir = os.path.join(os.path.dirname(__file__), "data")
     target_dir = os.path.join(base_data_dir, company, team, part)
 
@@ -70,20 +75,20 @@ async def list_chatbots(company: str, team: str, part: str):
             }
         )
 
-    # 생성 시간순으로 정렬하고 싶으면 아래 줄을 사용 (Descending 등)
+    # 생성 시간순으로 정렬 (내림차순)
     chatbots.sort(key=lambda x: x["createdAt"], reverse=True)
 
     return chatbots
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# (3) 챗봇 삭제 엔드포인트 (신규 추가)
+# (3) 챗봇 삭제 엔드포인트
 @app.delete("/chatbots")
 async def delete_chatbot(
     company: str = Query(...),
     team: str = Query(...),
     part: str = Query(...),
-    chatbot_name: str = Query(...)
+    chatbot_name: str = Query(...),
 ):
     """
     data/{company}/{team}/{part}/{chatbot_name} 폴더를 삭제합니다.
@@ -100,14 +105,13 @@ async def delete_chatbot(
         shutil.rmtree(chatbot_dir)
         return {"success": True}
     except Exception as e:
-        # 에러 시 자세한 스택트레이스와 함께 HTTPException을 던집니다
         tb = traceback.format_exc()
         print(f"[DELETE] Error while deleting chatbot:\n{tb}")
         raise HTTPException(status_code=500, detail=f"챗봇 삭제 실패: {str(e)}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# (4) PDF 업로드 + 벡터 인덱스 생성 엔드포인트 (기존 로직 유지)
+# (4) PDF 업로드 + 페이지별 이미지 변환 + 벡터 인덱스 생성 엔드포인트
 @app.post("/upload_pdf")
 async def upload_pdf(
     file: UploadFile = File(...),
@@ -117,23 +121,24 @@ async def upload_pdf(
     chatbot_name: str = Form(...),
 ):
     """
-    1) PDF 파일을 읽어서 특정 폴더(data/{company}/{team}/{part}/{chatbot_name}/pdf)에 저장
-    2) 그 PDF를 Document로 변환 → 청크 분할 → 해당 챗봇 폴더(data/.../faiss_index)에 벡터 인덱스 생성
-    3) 성공 응답과 함께, 저장된 PDF 경로와 벡터 인덱스 경로를 반환
+    1) PDF 파일을 읽어서 특정 폴더 (data/{company}/{team}/{part}/{chatbot_name}/pdf)에 저장
+    2) 해당 PDF를 페이지별 이미지(PNG)로 변환 → data/{company}/{team}/{part}/{chatbot_name}/images 에 저장
+    3) 그 PDF를 Document로 변환 → 청크 분할 → 해당 챗봇 폴더(data/.../faiss_index)에 벡터 인덱스 생성
+    4) 성공 응답과 함께, 저장된 PDF 경로 / 이미지 경로 리스트 / 벡터 인덱스 경로를 반환
     """
 
     # 1) 경로(디렉토리) 정의
-    #    backend/data/회사/팀/파트/챗봇명/pdf
-    #    backend/data/회사/팀/파트/챗봇명/faiss_index
     base_data_dir = os.path.join(os.path.dirname(__file__), "data")
-    pdf_folder = os.path.join(base_data_dir, company, team, part, chatbot_name, "pdf")
-    faiss_folder = os.path.join(
-        base_data_dir, company, team, part, chatbot_name, "faiss_index"
-    )
+    chatbot_base_dir = os.path.join(base_data_dir, company, team, part, chatbot_name)
+
+    pdf_folder = os.path.join(chatbot_base_dir, "pdf")
+    faiss_folder = os.path.join(chatbot_base_dir, "faiss_index")
+    image_folder = os.path.join(chatbot_base_dir, "images")
 
     # 디렉토리가 존재하지 않으면 생성
     os.makedirs(pdf_folder, exist_ok=True)
     os.makedirs(faiss_folder, exist_ok=True)
+    os.makedirs(image_folder, exist_ok=True)
 
     # 2) PDF 저장
     contents = await file.read()
@@ -141,35 +146,61 @@ async def upload_pdf(
     with open(saved_pdf_path, "wb") as f:
         f.write(contents)
 
-    # 3) PDF → Document 리스트로 변환
-    docs = pdf_to_documents(saved_pdf_path)
+    # 3) PDF → 페이지별 이미지 변환 (utils.pdf.convert_pdf_to_images 사용)
+    try:
+        # convert_pdf_to_images(pdf_path: str, output_dir: str) -> List[str]
+        # - output: output_dir 하위에 “page_1.png, page_2.png, …” 등으로 저장하고
+        #   최종적으로 생성된 파일 절대경로 리스트를 반환하도록 가정
+        image_paths: List[str] = convert_pdf_to_images(saved_pdf_path, image_folder)
 
-    # (필요시) 청크 분할 로직을 여기서 호출하거나, pdf_to_documents 내부에서 분할해도 무방합니다.
-    # 예를 들어, utils/pdf.py 내부에 chunk_documents 함수가 따로 있으면:
-    # from utils.pdf import chunk_documents
-    # docs = chunk_documents(docs)
+        # 디버깅용 로그
+        print(
+            f"[UPLOAD_PDF] Generated {len(image_paths)} images for '{file.filename}':"
+        )
+        for img in image_paths:
+            print("  -", img)
 
-    # 4) FAISS 벡터 인덱스 생성
-    build_vector_store(docs, index_dir=faiss_folder)
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[UPLOAD_PDF] PDF → 이미지 변환 중 오류:\n{tb}")
+        raise HTTPException(status_code=500, detail=f"PDF 이미지 변환 실패: {e}")
 
+    # 4) PDF → Document 리스트로 변환
+    try:
+        docs = pdf_to_documents(saved_pdf_path)
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[UPLOAD_PDF] PDF → Document 변환 중 오류:\n{tb}")
+        raise HTTPException(status_code=500, detail=f"PDF 파싱 실패: {e}")
+
+    # 6) FAISS 벡터 인덱스 생성
+    try:
+        build_vector_store(docs, index_dir=faiss_folder)
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[UPLOAD_PDF] 벡터 인덱스 생성 중 오류:\n{tb}")
+        raise HTTPException(status_code=500, detail=f"벡터 인덱스 생성 실패: {e}")
+
+    # 7) 최종 응답: PDF 경로 / 이미지 경로 리스트 / 벡터 인덱스 경로
     return {
-        "message": "PDF 업로드 및 벡터 저장 완료",
+        "message": "PDF 업로드, 페이지별 이미지 변환, 벡터 저장 완료",
         "pdf_path": saved_pdf_path,
+        "image_paths": image_paths,
         "faiss_index_dir": faiss_folder,
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# (5) RAG+FAISS를 이용한 Chat 엔드포인트 (수정된 부분)
-# ─────────────────────────────────────────────────────────────────────────────
-
+# (5) RAG+FAISS를 이용한 Chat 엔드포인트
 class ChatRequest(BaseModel):
     company: str
     team: str
     part: str
     chatbot_name: str
     question: str
-    chat_history: List[Dict[str, str]] = []  # [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
+    chat_history: List[
+        Dict[str, str]
+    ] = []  # [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
 
 
 class ChatResponse(BaseModel):
@@ -200,15 +231,22 @@ async def chat(request: ChatRequest):
     chat_history = request.chat_history or []
 
     if not (company and team and part and chatbot_name):
-        raise HTTPException(status_code=400, detail="company,team,part,chatbot_name 모두 필요합니다.")
+        raise HTTPException(
+            status_code=400, detail="company,team,part,chatbot_name 모두 필요합니다."
+        )
     if not question:
         raise HTTPException(status_code=400, detail="질문이 비어 있습니다.")
 
     base_data_dir = os.path.join(os.path.dirname(__file__), "data")
-    faiss_folder = os.path.join(base_data_dir, company, team, part, chatbot_name, "faiss_index")
+    faiss_folder = os.path.join(
+        base_data_dir, company, team, part, chatbot_name, "faiss_index"
+    )
 
     if not os.path.isdir(faiss_folder):
-        raise HTTPException(status_code=404, detail=f"'{chatbot_name}' 챗봇의 FAISS 인덱스를 찾을 수 없습니다.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"'{chatbot_name}' 챗봇의 FAISS 인덱스를 찾을 수 없습니다.",
+        )
 
     try:
         result = process_question(
