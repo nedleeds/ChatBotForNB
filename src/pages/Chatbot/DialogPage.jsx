@@ -5,8 +5,12 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import styles from './dialog.module.css';
 
-// PDF.js worker 설정
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+// // PDF.js worker 설정
+// pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+
+// React-PDF이 자체 제공하는 워커 엔트리 파일을 Vite에서 URL로 불러오도록 합니다.
+import pdfWorkerUrl from 'react-pdf/dist/esm/pdf.worker.entry.js?url';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export default function DialogPage(props) {
   const {
@@ -16,22 +20,11 @@ export default function DialogPage(props) {
     chatbotName: initialName,
     createdAt: initialCreated,
     lastTrainedAt: initialLast,
+    pdfUrl: initialPdfUrl,   // 전체 URL을 props로 받도록 이름 변경
     onClose,
   } = props;
 
   const navigate = useNavigate();
-
-  // 디버깅: props로 넘어온 값들 확인
-  console.log('DialogPage props:', {
-    company,
-    team,
-    part,
-    initialName,
-    initialCreated,
-    initialLast,
-    onClose: typeof onClose === 'function' ? '함수 전달됨' : '없음',
-  });
-
   const [chatbotName, setChatbotName] = useState(initialName || '');
   const [createdAt, setCreatedAt] = useState(initialCreated || '');
   const [lastTrainedAt, setLastTrainedAt] = useState(initialLast || '');
@@ -40,7 +33,7 @@ export default function DialogPage(props) {
   const [isTyping, setIsTyping] = useState(false); // 봇 타이핑 여부
   const [showRetrieval, setShowRetrieval] = useState(false);
   const [lastMetadata, setLastMetadata] = useState(null);
-  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(initialPdfUrl || ''); // 상태로 관리
   const pdfViewerRef = useRef(null);
 
   // 초기 렌더링 시, localStorage에 저장된 activeChatbotMeta 읽어서 state 보완
@@ -66,23 +59,13 @@ export default function DialogPage(props) {
     console.log('state.createdAt:', createdAt, ' state.lastTrainedAt:', lastTrainedAt);
   }, [createdAt, lastTrainedAt]);
 
-  // PDF 경로 가져오기 (Electron preload에 함수가 없으면 건너뛰도록)
+  // 부모에서 넘겨준 initialPdfUrl이 바뀌면 갱신
   useEffect(() => {
-    (async () => {
-      if (window.electronAPI && typeof window.electronAPI.getUploadedPdfPath === 'function') {
-        try {
-          const path = await window.electronAPI.getUploadedPdfPath();
-          console.log('◀ Electron에서 가져온 PDF 경로:', path);
-          setPdfFile(path);
-        } catch (err) {
-          console.error('PDF 경로 가져오는 중 오류:', err);
-          setPdfFile(null);
-        }
-      } else {
-        console.warn('electronAPI.getUploadedPdfPath 함수가 없습니다.');
-      }
-    })();
-  }, []);
+    if (initialPdfUrl) {
+      setPdfUrl(initialPdfUrl);
+      console.log('Props로 전달된 PDF URL:', initialPdfUrl);
+    }
+  }, [initialPdfUrl]);
 
   // 사용자가 “전송” 버튼 클릭 시 호출
   const handleSend = async () => {
@@ -167,22 +150,7 @@ export default function DialogPage(props) {
     }
   };
 
-  // ── (Retrieval 부분만 수정) ──
-
-  // 페이지 인덱스를 기반으로 StaticFiles URL 생성
-  const getStaticImageUrl = (pageIndex) => {
-    // encodeURIComponent를 이용해 챗봇 이름(경로)에 한글/공백이 있을 때 인코딩
-    const encodedName = encodeURIComponent(chatbotName);
-    // StaticFiles에서 서빙하는 URL 경로는 "/static/{company}/{team}/{part}/{chatbotName}/images/page_{n}.png"
-    const relPath = `${company}/${team}/${part}/${encodedName}/images/page_${pageIndex + 1}.png`;
-    return `/static/${relPath.replace(/\\/g, '/')}`; // Windows의 \\를 /로 바꿔줍니다.
-  };
-
   return (
-    /**
-     * 1) container → 화면 전체 높이를 채우도록 height:100vh 설정
-     * 2) display:flex, flexDirection:column 으로 헤더+콘텐츠 영역 배치
-     */
     <div
       className={styles.container}
       style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
@@ -194,11 +162,9 @@ export default function DialogPage(props) {
           <button
             className={styles.homeButton}
             onClick={() => {
-              // 부모가 onClose를 전달한 경우 호출
               if (typeof onClose === 'function') {
                 onClose();
               }
-              // React Router를 쓴다면 /chatbot 경로로 이동
               navigate('/chatbot');
             }}
             title="홈으로"
@@ -219,17 +185,11 @@ export default function DialogPage(props) {
       </div>
 
       {/* ── 콘텐츠 영역: 채팅 + Retrieval ── */}
-      {/**
-       * contentWrapper: 
-       *   - flex:1 → 헤더를 제외한 남은 공간 전체를 채움
-       *   - display:flex, flexDirection:row → 좌우 패널 나란히
-       *   - overflow:hidden → 자식이 넘칠 때 내부에서 처리
-       */}
       <div
         className={styles.contentWrapper}
         style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
       >
-        {/* ── 좌측 채팅 래퍼: flex:1, column 배치 ── */}
+        {/* ── 좌측 채팅 래퍼 ── */}
         <div
           className={styles.chatWrapper}
           style={{ display: 'flex', flexDirection: 'column', flex: 1 }}
@@ -282,7 +242,7 @@ export default function DialogPage(props) {
             )}
           </div>
 
-          {/* ── 입력창 + 버튼 영역(Input Area): flexShrink:0 고정 ── */}
+          {/* ── 입력창 + 버튼 영역(Input Area) ── */}
           <div className={styles.inputArea} style={{ flexShrink: 0 }}>
             <input
               value={input}
@@ -293,14 +253,16 @@ export default function DialogPage(props) {
             />
 
             <button
-              className={`${styles.infoButton} ${!lastMetadata ? styles.infoButtonDisabled : ''}`}
-              onClick={() => setShowRetrieval(prev => !prev)}
-              disabled={!lastMetadata}
-              title={lastMetadata ? 'Retrieval 정보 보기' : '아직 Retrieval 정보가 없습니다'}
+              className={`${styles.infoButton} ${!pdfUrl ? styles.infoButtonDisabled : ''}`}
+              onClick={() => {
+                setShowRetrieval(prev => !prev);
+              }}
+              disabled={!pdfUrl}
+              title={pdfUrl ? 'Retrieval 정보 보기' : 'PDF URL이 없습니다'}
             >
               정보보기
             </button>
-
+            
             <button className={styles.sendButton} onClick={handleSend}>
               전송
             </button>
@@ -308,7 +270,7 @@ export default function DialogPage(props) {
         </div>
 
         {/* ── 우측 Retrieval 패널 ── */}
-        {showRetrieval && lastMetadata && (
+        {showRetrieval && lastMetadata && pdfUrl && (
           <div
             className={styles.retrievalPanel}
             style={{ display: 'flex', flexDirection: 'column', width: '40%' }}
@@ -324,49 +286,50 @@ export default function DialogPage(props) {
                 ×
               </button>
             </div>
-            {/* Retrieval Content: flex:1, overflowY:auto 으로 스크롤 */}
+
+            {/* Retrieval Content: “벡터 PDF 페이지” 렌더 + 스크롤 */}
             <div
               className={styles.retrievalContent}
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-              }}
+              style={{ flex: 1, overflowY: 'auto' }}
             >
               {lastMetadata.pages.length === 0 ? (
                 <p style={{ color: '#e0e0e0', padding: '8px' }}>
                   Retrieval 데이터가 없습니다.
                 </p>
               ) : (
-                lastMetadata.pages.map((pg, idx) => (
-                  <div
-                    key={idx}
-                    className={styles.retrievalItem}
-                    onClick={() => {
-                      if (
-                        pdfViewerRef.current &&
-                        typeof pdfViewerRef.current.scrollToPage === 'function'
-                      ) {
-                        pdfViewerRef.current.scrollToPage(pg);
-                      }
-                    }}
-                  >
-                    <div className={styles.retrievalItemHeader}>
-                      페이지 {pg + 1} ({(lastMetadata.scores[idx] * 100).toFixed(1)}%)
-                    </div>
-                    <div className={styles.thumbnailContainer}>
-                      {/* StaticFiles로 서빙된 이미지를 img로 가져오기 */}
-                    </div>
-                   <img
-                      src={`http://localhost:8088${getStaticImageUrl(pg)}`}
-                      alt={`Page ${pg + 1}`}
-                      style={{
-                        width: '100%',    // → 카드 가로 폭에 꽉 차도록 변경
-                        height: 'auto',   // → 종횡비 유지
-                        borderRadius: '4px'
+                lastMetadata.pages.map((pg, idx) => {
+                  const pageNum = pg + 1; // 0-based → 1-based
+                  return (
+                    <div
+                      key={idx}
+                      className={styles.retrievalItem}
+                      style={{ marginBottom: '12px' }}
+                      onClick={() => {
+                        if (
+                          pdfViewerRef.current &&
+                          typeof pdfViewerRef.current.scrollToPage === 'function'
+                        ) {
+                          pdfViewerRef.current.scrollToPage(pg);
+                        }
                       }}
-                    />
-                  </div>
-                ))
+                    >
+                      <div className={styles.retrievalItemHeader}>
+                        페이지 {pageNum} ({(lastMetadata.scores[idx] * 100).toFixed(1)}%)
+                      </div>
+                      <div className={styles.thumbnailContainer} style={{ textAlign: 'center' }}>
+                        {/* React-PDF를 이용해 벡터로 렌더링 */}
+                        <Document file={pdfUrl} renderMode="canvas">
+                          <Page
+                            pageNumber={pageNum}
+                            width={300}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={false}
+                          />
+                        </Document>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

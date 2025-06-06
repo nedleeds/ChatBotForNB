@@ -32,6 +32,8 @@ export default function ChatbotPage() {
 
   // ── 로컬스토리지 키 ──
   const STORAGE_KEY = 'loginSelections';
+  // ── 챗봇 메타 저장 키 ──
+  const META_KEY_PREFIX = 'chatbotMeta_'; // e.g. chatbotMeta_HD현대로보틱스_로봇소프트웨어개발팀_공통 지원 SW_영수증
 
   // ── 학습된 챗봇 목록 ──
   const [chatbots, setChatbots] = useState([]);
@@ -145,6 +147,8 @@ export default function ChatbotPage() {
       const res = await axios.get('http://localhost:8088/chatbots', {
         params: { company, team, part },
       });
+      // res.data 에 chatbot 객체들이 배열로 들어옴
+      // 여기서 각 객체에 pdf_url이 포함되어 있다고 가정
       setChatbots(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('FastAPI → 챗봇 목록 조회 중 오류:', err);
@@ -186,18 +190,33 @@ export default function ChatbotPage() {
   // ── activeChatbot 상태 추가 ──
   const [activeChatbot, setActiveChatbot] = useState(null);
 
-  // ── 6) “불러오기” 클릭 → DialogPage 보여주기 ──
-  const handleLoad = async (chatbotName) => {
+  // ── 6) “불러오기” 클릭 → DialogPage 보여주기 + PDF URL 메타 저장 ──
+  const handleLoad = async (chatbotObj) => {
     try {
       // 회사/팀/파트 정보와 함께 Electron IPC 호출
       const result = await window.electronAPI.loadChatbot({
         company: selectedCompany,
         team: selectedTeam,
         part: selectedPart,
-        chatbotName,
+        chatbotName: chatbotObj.name,
       });
       if (result.success) {
-        setActiveChatbot(chatbotName);
+        setActiveChatbot(chatbotObj.name);
+
+        // ── 여기서 “메타데이터”로 pdf_url을 저장 ──
+        // chatbots 배열에 이미 pdf_url 필드가 있다고 가정
+        // 로컬스토리지 키: chatbotMeta_{company}_{team}_{part}_{chatbotName}
+        const metaKey = `${META_KEY_PREFIX}${selectedCompany}_${selectedTeam}_${selectedPart}_${chatbotObj.name}`;
+        const metaValue = {
+          company: selectedCompany,
+          team: selectedTeam,
+          part: selectedPart,
+          chatbotName: chatbotObj.name,
+          pdfUrl: chatbotObj.pdf_url || '',
+          createdAt: chatbotObj.createdAt,
+          lastTrainedAt: chatbotObj.lastTrainedAt,
+        };
+        localStorage.setItem(metaKey, JSON.stringify(metaValue));
       } else {
         alert('챗봇 불러오기 실패: ' + result.error);
       }
@@ -212,6 +231,7 @@ export default function ChatbotPage() {
     setUploadName('');
     setShowUploadModal(true);
   };
+
 
   // ── 8) 이름 입력 “확인” → 파일 선택 다이얼로그 오픈 ──
   const handleUploadConfirm = () => {
@@ -464,6 +484,7 @@ export default function ChatbotPage() {
                 part={selectedPart}
                 chatbotName={activeChatbot}
                 createdAt={matched.createdAt}
+                pdfUrl={`http://localhost:8088${matched.pdf_url}`}
                 lastTrainedAt={matched.lastTrainedAt}
                 onClose={() => {
                   setActiveChatbot(null);
@@ -506,7 +527,7 @@ export default function ChatbotPage() {
                         {/* 불러오기 버튼 (DialogPage 표시) */}
                         <button
                           className={styles.loadButton}
-                          onClick={() => handleLoad(c.name)}
+                          onClick={() => handleLoad(c)}
                         >
                           불러오기
                         </button>

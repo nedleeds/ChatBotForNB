@@ -9,39 +9,39 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from utils.pdf import pdf_to_documents, convert_pdf_to_images
+from utils.pdf import pdf_to_documents  # 이미지 변환은 제거됨
 from utils.embedding import build_vector_store
 from utils.rag import process_question
 
 app = FastAPI()
 
+# ─────────────────────────────────────────────────────────────────────────────
 # (1) Electron ↔ FastAPI 간 통신을 허용하기 위해 CORS를 넓게 오픈
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 로컬 데스크톱 앱이라면 "*"로 두어도 무방
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# StaticFiles로 data/ 디렉토리를 /static 경로로 마운트
+# → React에서 http://localhost:8088/static/... 으로 접근 가능
+data_dir = os.path.join(os.path.dirname(__file__), "data")
 app.mount(
     "/static",
-    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "data")),
+    StaticFiles(directory=data_dir),
     name="static",
 )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # (2) 학습된 챗봇 목록 조회 엔드포인트
 @app.get("/chatbots", response_model=List[Dict[str, Any]])
 async def list_chatbots(company: str, team: str, part: str):
-    """
-    data/{company}/{team}/{part} 하위 폴더(챗봇 이름)를 스캔하여,
-    각 챗봇 폴더 내에 'faiss_index' 디렉토리가 존재하면 '학습된 챗봇'으로 간주하고
-    [{"name", "company", "team", "part", "indexPath", "createdAt", "lastTrainedAt"}, …] 형태로 반환.
-    """
     base_data_dir = os.path.join(os.path.dirname(__file__), "data")
     target_dir = os.path.join(base_data_dir, company, team, part)
 
-    # 해당 경로가 없으면 빈 리스트 반환
     if not os.path.isdir(target_dir):
         return []
 
@@ -50,15 +50,27 @@ async def list_chatbots(company: str, team: str, part: str):
         chatbot_dir = os.path.join(target_dir, chatbot_name)
         faiss_dir = os.path.join(chatbot_dir, "faiss_index")
         if not os.path.isdir(faiss_dir):
-            # faiss_index 폴더가 없으면 학습되지 않은 챗봇이므로 무시
             continue
 
-        # faiss_index 디렉토리의 생성 시간 & 수정 시간을 가져옴
+        # ── PDF 파일명 찾기 ──
+        pdf_url = None
+        pdf_folder = os.path.join(chatbot_dir, "pdf")
+        if os.path.isdir(pdf_folder):
+            # .pdf 확장자를 가진 파일 중 첫 번째를 사용
+            for fname in os.listdir(pdf_folder):
+                if fname.lower().endswith(".pdf"):
+                    full_pdf_path = os.path.join(pdf_folder, fname)
+                    # data_dir 기준으로 상대경로를 구해 "/static/..." 형태로 만듦
+                    rel_pdf = os.path.relpath(full_pdf_path, base_data_dir).replace(
+                        "\\", "/"
+                    )
+                    pdf_url = f"/static/{rel_pdf}"
+                    break
+
         try:
             created_ts = os.path.getctime(faiss_dir)
             modified_ts = os.path.getmtime(faiss_dir)
         except OSError:
-            # 윈도우나 일부 환경에서 ctime이 변할 수 있으니 예외 처리
             created_ts = time.time()
             modified_ts = time.time()
 
@@ -69,15 +81,13 @@ async def list_chatbots(company: str, team: str, part: str):
                 "team": team,
                 "part": part,
                 "indexPath": faiss_dir,
-                # JS에서 new Date(ms)로 쓰기 위해 밀리초 단위로 보냄
                 "createdAt": int(created_ts * 1000),
                 "lastTrainedAt": int(modified_ts * 1000),
+                "pdf_url": pdf_url,  # 없으면 None
             }
         )
 
-    # 생성 시간순으로 정렬 (내림차순)
     chatbots.sort(key=lambda x: x["createdAt"], reverse=True)
-
     return chatbots
 
 
@@ -90,9 +100,6 @@ async def delete_chatbot(
     part: str = Query(...),
     chatbot_name: str = Query(...),
 ):
-    """
-    data/{company}/{team}/{part}/{chatbot_name} 폴더를 삭제합니다.
-    """
     base_data_dir = os.path.join(os.path.dirname(__file__), "data")
     chatbot_dir = os.path.join(base_data_dir, company, team, part, chatbot_name)
 
@@ -100,7 +107,6 @@ async def delete_chatbot(
         raise HTTPException(status_code=404, detail="해당 챗봇을 찾을 수 없습니다.")
 
     try:
-        # 삭제 전, 실제 경로가 제대로 잡혔는지 로그에 찍어 봅시다
         print(f"[DELETE] Attempting to remove directory: {chatbot_dir}")
         shutil.rmtree(chatbot_dir)
         return {"success": True}
@@ -111,7 +117,7 @@ async def delete_chatbot(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# (4) PDF 업로드 + 페이지별 이미지 변환 + 벡터 인덱스 생성 엔드포인트
+# (4) PDF 업로드 + 벡터 인덱스 생성 엔드포인트
 @app.post("/upload_pdf")
 async def upload_pdf(
     file: UploadFile = File(...),
@@ -121,51 +127,30 @@ async def upload_pdf(
     chatbot_name: str = Form(...),
 ):
     """
-    1) PDF 파일을 읽어서 특정 폴더 (data/{company}/{team}/{part}/{chatbot_name}/pdf)에 저장
-    2) 해당 PDF를 페이지별 이미지(PNG)로 변환 → data/{company}/{team}/{part}/{chatbot_name}/images 에 저장
-    3) 그 PDF를 Document로 변환 → 청크 분할 → 해당 챗봇 폴더(data/.../faiss_index)에 벡터 인덱스 생성
-    4) 성공 응답과 함께, 저장된 PDF 경로 / 이미지 경로 리스트 / 벡터 인덱스 경로를 반환
+    1) PDF 파일을 data/{company}/{team}/{part}/{chatbot_name}/pdf/{chatbot_name}.pdf 로 저장
+    2) 그 PDF를 Document로 변환 → 벡터 인덱스 생성 (data/.../faiss_index)
+    3) 성공 응답과 함께, 저장된 PDF의 /static 경로를 반환
     """
 
     # 1) 경로(디렉토리) 정의
-    base_data_dir = os.path.join(os.path.dirname(__file__), "data")
+    base_data_dir = data_dir  # 이미 위에서 data_dir로 정의됨 (backend/data)
     chatbot_base_dir = os.path.join(base_data_dir, company, team, part, chatbot_name)
 
     pdf_folder = os.path.join(chatbot_base_dir, "pdf")
     faiss_folder = os.path.join(chatbot_base_dir, "faiss_index")
-    image_folder = os.path.join(chatbot_base_dir, "images")
 
     # 디렉토리가 존재하지 않으면 생성
     os.makedirs(pdf_folder, exist_ok=True)
     os.makedirs(faiss_folder, exist_ok=True)
-    os.makedirs(image_folder, exist_ok=True)
 
-    # 2) PDF 저장
+    # 2) PDF 저장: 파일은 그대로 사용
+    original_filename = file.filename
+    saved_pdf_path = os.path.join(pdf_folder, original_filename)
     contents = await file.read()
-    saved_pdf_path = os.path.join(pdf_folder, file.filename)
     with open(saved_pdf_path, "wb") as f:
         f.write(contents)
 
-    # 3) PDF → 페이지별 이미지 변환 (utils.pdf.convert_pdf_to_images 사용)
-    try:
-        # convert_pdf_to_images(pdf_path: str, output_dir: str) -> List[str]
-        # - output: output_dir 하위에 “page_1.png, page_2.png, …” 등으로 저장하고
-        #   최종적으로 생성된 파일 절대경로 리스트를 반환하도록 가정
-        image_paths: List[str] = convert_pdf_to_images(saved_pdf_path, image_folder)
-
-        # 디버깅용 로그
-        print(
-            f"[UPLOAD_PDF] Generated {len(image_paths)} images for '{file.filename}':"
-        )
-        for img in image_paths:
-            print("  -", img)
-
-    except Exception as e:
-        tb = traceback.format_exc()
-        print(f"[UPLOAD_PDF] PDF → 이미지 변환 중 오류:\n{tb}")
-        raise HTTPException(status_code=500, detail=f"PDF 이미지 변환 실패: {e}")
-
-    # 4) PDF → Document 리스트로 변환
+    # 3) PDF → Document 리스트로 변환 (텍스트 추출 등)
     try:
         docs = pdf_to_documents(saved_pdf_path)
     except Exception as e:
@@ -173,7 +158,7 @@ async def upload_pdf(
         print(f"[UPLOAD_PDF] PDF → Document 변환 중 오류:\n{tb}")
         raise HTTPException(status_code=500, detail=f"PDF 파싱 실패: {e}")
 
-    # 6) FAISS 벡터 인덱스 생성
+    # 4) FAISS 벡터 인덱스 생성
     try:
         build_vector_store(docs, index_dir=faiss_folder)
     except Exception as e:
@@ -181,11 +166,10 @@ async def upload_pdf(
         print(f"[UPLOAD_PDF] 벡터 인덱스 생성 중 오류:\n{tb}")
         raise HTTPException(status_code=500, detail=f"벡터 인덱스 생성 실패: {e}")
 
-    # 7) 최종 응답: PDF 경로 / 이미지 경로 리스트 / 벡터 인덱스 경로
+    # 5) 최종 응답: PDF URL과 벡터 인덱스 경로 반환
     return {
-        "message": "PDF 업로드, 페이지별 이미지 변환, 벡터 저장 완료",
-        "pdf_path": saved_pdf_path,
-        "image_paths": image_paths,
+        "message": "PDF 업로드 및 벡터 저장 완료",
+        "pdf_url": saved_pdf_path,
         "faiss_index_dir": faiss_folder,
     }
 
@@ -198,31 +182,16 @@ class ChatRequest(BaseModel):
     part: str
     chatbot_name: str
     question: str
-    chat_history: List[
-        Dict[str, str]
-    ] = []  # [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
+    chat_history: List[Dict[str, str]] = []
 
 
 class ChatResponse(BaseModel):
     answer: str
-    sources: List[Dict[str, Any]]  # [{"page": int, "text": str}, …]
+    sources: List[Dict[str, Any]]
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    클라이언트로부터 받은 JSON:
-      {
-        "company": "...",
-        "team": "...",
-        "part": "...",
-        "chatbot_name": "...",
-        "question": "...",
-        "chat_history": [ { "role": "user", "content": "..." }, … ]
-      }
-    내부에서는 FAISS 인덱스 폴더를 찾아서 process_question을 호출합니다.
-    """
-
     company = request.company.strip()
     team = request.team.strip()
     part = request.part.strip()
@@ -232,12 +201,12 @@ async def chat(request: ChatRequest):
 
     if not (company and team and part and chatbot_name):
         raise HTTPException(
-            status_code=400, detail="company,team,part,chatbot_name 모두 필요합니다."
+            status_code=400, detail="company, team, part, chatbot_name 모두 필요합니다."
         )
     if not question:
         raise HTTPException(status_code=400, detail="질문이 비어 있습니다.")
 
-    base_data_dir = os.path.join(os.path.dirname(__file__), "data")
+    base_data_dir = data_dir  # "/.../backend/data"
     faiss_folder = os.path.join(
         base_data_dir, company, team, part, chatbot_name, "faiss_index"
     )
@@ -254,7 +223,6 @@ async def chat(request: ChatRequest):
             index_dir=faiss_folder,
         )
         return ChatResponse(answer=result["answer"], sources=result["sources"])
-
     except Exception as e:
         tb = traceback.format_exc()
         print(f"[CHAT] Error while processing question:\n{tb}")
