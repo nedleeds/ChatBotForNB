@@ -79,17 +79,17 @@ export default function DialogPage(props) {
 
   // ── Retrieval 패널이 렌더될 때/윈도우 리사이즈 시에 너비를 측정 ──
   useEffect(() => {
-  function updatePanelWidth() {
-    if (retrievalPanelRef.current) {
-      setPanelWidth(retrievalPanelRef.current.getBoundingClientRect().width);
+    function updatePanelWidth() {
+      if (retrievalPanelRef.current) {
+        setPanelWidth(retrievalPanelRef.current.getBoundingClientRect().width);
+      }
     }
-  }
-  if (showRetrieval) {
-    updatePanelWidth();
-  }
-  window.addEventListener('resize', updatePanelWidth);
-  return () => window.removeEventListener('resize', updatePanelWidth);
-}, [showRetrieval]);
+    if (showRetrieval) {
+      updatePanelWidth();
+    }
+    window.addEventListener('resize', updatePanelWidth);
+    return () => window.removeEventListener('resize', updatePanelWidth);
+  }, [showRetrieval]);
 
   // ── Zoom 버튼 핸들러 ──
   const handleZoomIn = () => {
@@ -247,7 +247,7 @@ export default function DialogPage(props) {
               disabled={!pdfUrl}
               title={pdfUrl ? 'Retrieval 정보 보기' : 'PDF URL이 없습니다'}
             >
-              정보보기
+              관련문서
             </button>
             <button className={styles.sendButton} onClick={handleSend}>
               전송
