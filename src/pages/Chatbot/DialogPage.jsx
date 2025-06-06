@@ -1,3 +1,5 @@
+// src/pages/Chatbot/DialogPage.jsx
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
@@ -5,10 +7,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import styles from './dialog.module.css';
 
-// // PDF.js worker 설정
-// pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-
-// React-PDF이 자체 제공하는 워커 엔트리 파일을 Vite에서 URL로 불러오도록 합니다.
+// React-PDF 워커 설정
 import pdfWorkerUrl from 'react-pdf/dist/esm/pdf.worker.entry.js?url';
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -20,30 +19,41 @@ export default function DialogPage(props) {
     chatbotName: initialName,
     createdAt: initialCreated,
     lastTrainedAt: initialLast,
-    pdfUrl: initialPdfUrl,   // 전체 URL을 props로 받도록 이름 변경
+    pdfUrl: initialPdfUrl,
     onClose,
   } = props;
 
   const navigate = useNavigate();
+
+  // ── 기존 state들 ──
   const [chatbotName, setChatbotName] = useState(initialName || '');
   const [createdAt, setCreatedAt] = useState(initialCreated || '');
   const [lastTrainedAt, setLastTrainedAt] = useState(initialLast || '');
-  const [messages, setMessages] = useState([]);   // 채팅 메시지 히스토리
-  const [input, setInput] = useState('');         // 입력창 값
-  const [isTyping, setIsTyping] = useState(false); // 봇 타이핑 여부
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const [showRetrieval, setShowRetrieval] = useState(false);
   const [lastMetadata, setLastMetadata] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState(initialPdfUrl || ''); // 상태로 관리
+  const [pdfUrl, setPdfUrl] = useState(initialPdfUrl || '');
+
+  // ── Retrieval 패널 스크롤＋PDF 뷰어용 ref ──
   const pdfViewerRef = useRef(null);
 
-  // 초기 렌더링 시, localStorage에 저장된 activeChatbotMeta 읽어서 state 보완
+  // ── 추가: Retrieval 패널 Zoom용 state, ref ──
+  const [scale, setScale] = useState(1.0);
+  const [panelWidth, setPanelWidth] = useState(0);
+  const retrievalPanelRef = useRef(null);
+
+  // ── 추가: IME(조합) 상태 감지 ──
+  const [isComposing, setIsComposing] = useState(false);
+
+  // ── localStorage에서 메타 정보 불러오기 ──
   useEffect(() => {
     if (!initialName) {
       const stored = localStorage.getItem('activeChatbotMeta');
       if (stored) {
         try {
           const meta = JSON.parse(stored);
-          console.log('localStorage에서 로드된 meta:', meta);
           setChatbotName(meta.name || '');
           setCreatedAt(meta.createdAt || '');
           setLastTrainedAt(meta.lastTrainedAt || '');
@@ -54,12 +64,12 @@ export default function DialogPage(props) {
     }
   }, [initialName]);
 
-  // 디버깅: state에 저장된 생성/마지막 학습 시간 확인
+  // ── 디버깅: 생성/마지막 학습 시간 로그 ──
   useEffect(() => {
-    console.log('state.createdAt:', createdAt, ' state.lastTrainedAt:', lastTrainedAt);
+    console.log('state.createdAt:', createdAt, 'state.lastTrainedAt:', lastTrainedAt);
   }, [createdAt, lastTrainedAt]);
 
-  // 부모에서 넘겨준 initialPdfUrl이 바뀌면 갱신
+  // ── 부모에서 전달된 initialPdfUrl 변경 시 업데이트 ──
   useEffect(() => {
     if (initialPdfUrl) {
       setPdfUrl(initialPdfUrl);
@@ -67,33 +77,42 @@ export default function DialogPage(props) {
     }
   }, [initialPdfUrl]);
 
-  // 사용자가 “전송” 버튼 클릭 시 호출
+  // ── Retrieval 패널이 렌더될 때/윈도우 리사이즈 시에 너비를 측정 ──
+  useEffect(() => {
+  function updatePanelWidth() {
+    if (retrievalPanelRef.current) {
+      setPanelWidth(retrievalPanelRef.current.getBoundingClientRect().width);
+    }
+  }
+  if (showRetrieval) {
+    updatePanelWidth();
+  }
+  window.addEventListener('resize', updatePanelWidth);
+  return () => window.removeEventListener('resize', updatePanelWidth);
+}, [showRetrieval]);
+
+  // ── Zoom 버튼 핸들러 ──
+  const handleZoomIn = () => {
+    setScale(prev => Math.min(prev + 0.2, 3));
+  };
+  const handleZoomOut = () => {
+    setScale(prev => Math.max(prev - 0.2, 0.4));
+  };
+
+  // ── “전송” 버튼 클릭 시 호출 ──
   const handleSend = async () => {
     if (input.trim() === '') return;
 
-    // (1) 화면에 사용자 메시지 추가
     setMessages(prev => [...prev, { from: 'user', text: input }]);
     const question = input;
     setInput('');
-
-    // (2) 봇 타이핑 시작
     setIsTyping(true);
 
     try {
-      // 대화 히스토리를 role/content 형태로 변환
       const chat_history = messages.map(msg => ({
         role: msg.from === 'user' ? 'user' : 'assistant',
         content: msg.text,
       }));
-
-      console.log('▶ 프론트에서 보낼 데이터:', {
-        company,
-        team,
-        part,
-        chatbot_name: chatbotName,
-        question,
-        chat_history
-      });
 
       const res = await axios.post(
         'http://localhost:8088/chat',
@@ -108,11 +127,7 @@ export default function DialogPage(props) {
         { headers: { 'Content-Type': 'application/json' } }
       );
 
-      console.log('◀ 백엔드 응답(res.data):', res.data);
-
       const { answer, sources } = res.data;
-
-      // (3) 화면에 봇 응답 추가
       setMessages(prev => [...prev, { from: 'bot', text: answer }]);
       setLastMetadata({
         pages: Array.isArray(sources) ? sources.map(s => s.page) : [],
@@ -126,25 +141,15 @@ export default function DialogPage(props) {
       ]);
       setLastMetadata(null);
     } finally {
-      // (4) 봇 타이핑 종료
       setIsTyping(false);
     }
   };
 
-  // Enter 키 입력 시 전송
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  // 시간 문자열을 “YYYY-MM-DD HH:mm:ss”로 포맷팅
+  // ── 시간 포맷 함수 ──
   const formatDateTime = (isoValue) => {
     if (!isoValue) return '-';
     try {
-      const date = new Date(isoValue);
-      return date.toLocaleString();
+      return new Date(isoValue).toLocaleString();
     } catch {
       return '-';
     }
@@ -158,26 +163,19 @@ export default function DialogPage(props) {
       {/* ── 상단 바(Header) ── */}
       <div className={styles.header}>
         <div className={styles.headerRow}>
-          {/* 홈 버튼 */}
           <button
             className={styles.homeButton}
             onClick={() => {
-              if (typeof onClose === 'function') {
-                onClose();
-              }
+              if (typeof onClose === 'function') onClose();
               navigate('/chatbot');
             }}
             title="홈으로"
           >
             🏠
           </button>
-
-          {/* 챗봇 이름 */}
           <span className={styles.headerTitle}>
             {chatbotName || '이름 없음'}
           </span>
-
-          {/* 생성/마지막 학습 메타 */}
           <span className={styles.headerMeta}>
             생성: {formatDateTime(createdAt)} | 마지막 학습: {formatDateTime(lastTrainedAt)}
           </span>
@@ -194,7 +192,7 @@ export default function DialogPage(props) {
           className={styles.chatWrapper}
           style={{ display: 'flex', flexDirection: 'column', flex: 1 }}
         >
-          {/* ── 채팅 메시지 목록 (스크롤 가능) ── */}
+          {/* ── 채팅 메시지 목록 ── */}
           <div
             className={styles.chatList}
             style={{ flex: 1, overflowY: 'auto' }}
@@ -206,16 +204,14 @@ export default function DialogPage(props) {
                 style={{ textAlign: msg.from === 'user' ? 'right' : 'left' }}
               >
                 <span
-                  className={
-                    msg.from === 'user' ? styles.userBubble : styles.botBubble
-                  }
+                  className={msg.from === 'user' ? styles.userBubble : styles.botBubble}
                 >
                   {msg.text}
                 </span>
               </div>
             ))}
 
-            {/* 봇 타이핑 인디케이터 (좌측) */}
+            {/* 봇 타이핑 인디케이터 */}
             {isTyping && (
               <div className={styles.chatMessage} style={{ textAlign: 'left' }}>
                 <span className={styles.botBubble}>
@@ -227,42 +223,32 @@ export default function DialogPage(props) {
                 </span>
               </div>
             )}
-
-            {/* 사용자 타이핑 인디케이터 (우측) */}
-            {input.trim() !== '' && (
-              <div className={styles.chatMessage} style={{ textAlign: 'right' }}>
-                <span className={styles.userBubble}>
-                  <span className={styles.typingIndicator}>
-                    <span className={styles.dot} />
-                    <span className={styles.dot} />
-                    <span className={styles.dot} />
-                  </span>
-                </span>
-              </div>
-            )}
           </div>
 
-          {/* ── 입력창 + 버튼 영역(Input Area) ── */}
+          {/* ── 입력창 + 버튼 영역 ── */}
           <div className={styles.inputArea} style={{ flexShrink: 0 }}>
             <input
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !isComposing) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
               placeholder="질문을 입력하세요..."
               className={styles.inputField}
             />
-
             <button
               className={`${styles.infoButton} ${!pdfUrl ? styles.infoButtonDisabled : ''}`}
-              onClick={() => {
-                setShowRetrieval(prev => !prev);
-              }}
+              onClick={() => setShowRetrieval(prev => !prev)}
               disabled={!pdfUrl}
               title={pdfUrl ? 'Retrieval 정보 보기' : 'PDF URL이 없습니다'}
             >
               정보보기
             </button>
-            
             <button className={styles.sendButton} onClick={handleSend}>
               전송
             </button>
@@ -272,12 +258,53 @@ export default function DialogPage(props) {
         {/* ── 우측 Retrieval 패널 ── */}
         {showRetrieval && lastMetadata && pdfUrl && (
           <div
+            ref={retrievalPanelRef}
             className={styles.retrievalPanel}
-            style={{ display: 'flex', flexDirection: 'column', width: '40%' }}
+            style={{ display: 'flex', flexDirection: 'column', width: '50%' }}
           >
             {/* Retrieval Header */}
-            <div className={styles.retrievalHeader}>
-              <h3 className={styles.retrievalHeaderTitle}>Retrieval 정보</h3>
+            <div className={styles.retrievalHeader} style={{ display: 'flex', alignItems: 'center' }}>
+              <h3 className={styles.retrievalHeaderTitle} style={{ flex: 1 }}>
+                Retrieval 정보
+              </h3>
+
+              {/* Zoom 버튼 */}
+              <button
+                onClick={handleZoomOut}
+                style={{
+                  marginRight: '8px',
+                  width: '28px',
+                  height: '28px',
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                  border: '1px solid #555',
+                  color: '#fff',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                }}
+                title="축소"
+              >
+                －
+              </button>
+              <button
+                onClick={handleZoomIn}
+                style={{
+                  marginRight: '16px',
+                  width: '28px',
+                  height: '28px',
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                  border: '1px solid #555',
+                  color: '#fff',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                }}
+                title="확대"
+              >
+                ＋
+              </button>
+
+              {/* 닫기 버튼 */}
               <button
                 className={styles.retrievalCloseButton}
                 onClick={() => setShowRetrieval(false)}
@@ -287,10 +314,10 @@ export default function DialogPage(props) {
               </button>
             </div>
 
-            {/* Retrieval Content: “벡터 PDF 페이지” 렌더 + 스크롤 */}
+            {/* Retrieval Content: 썸네일 렌더 + 스크롤 */}
             <div
               className={styles.retrievalContent}
-              style={{ flex: 1, overflowY: 'auto' }}
+              style={{ flex: 1, overflow: 'auto' }}
             >
               {lastMetadata.pages.length === 0 ? (
                 <p style={{ color: '#e0e0e0', padding: '8px' }}>
@@ -298,12 +325,12 @@ export default function DialogPage(props) {
                 </p>
               ) : (
                 lastMetadata.pages.map((pg, idx) => {
-                  const pageNum = pg + 1; // 0-based → 1-based
+                  const pageNum = pg + 1;
                   return (
                     <div
                       key={idx}
                       className={styles.retrievalItem}
-                      style={{ marginBottom: '12px' }}
+                      style={{ marginBottom: '12px', cursor: 'pointer' }}
                       onClick={() => {
                         if (
                           pdfViewerRef.current &&
@@ -316,12 +343,12 @@ export default function DialogPage(props) {
                       <div className={styles.retrievalItemHeader}>
                         페이지 {pageNum} ({(lastMetadata.scores[idx] * 100).toFixed(1)}%)
                       </div>
-                      <div className={styles.thumbnailContainer} style={{ textAlign: 'center' }}>
-                        {/* React-PDF를 이용해 벡터로 렌더링 */}
+                      <div className={styles.thumbnailContainer}
+                        style={{ textAlign: 'center', overflow: 'auto' }}>
                         <Document file={pdfUrl} renderMode="canvas">
                           <Page
                             pageNumber={pageNum}
-                            width={300}
+                            width={panelWidth * scale}
                             renderTextLayer={false}
                             renderAnnotationLayer={false}
                           />
