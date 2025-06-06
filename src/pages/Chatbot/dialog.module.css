@@ -184,7 +184,7 @@
 /* 전송 버튼 */
 .sendButton {
   padding: 10px 16px;
-  background-color: #28a745;
+  background-color: #1f6feb;
   /* 녹색 강조 색 */
   color: #ffffff;
   border: none;
@@ -195,7 +195,7 @@
 }
 
 .sendButton:hover {
-  background-color: #218838;
+  background-color: #0077cc;
   /* 호버 시 진한 녹색 */
   transform: translateY(-1px);
 }
