@@ -1,20 +1,23 @@
 {
-  "name": "chatbot",
-  "version": "1.0.0",
-  "description": "신입사원 교육용 챗봇",
+  "name": "chatbot-for-nb",
+  "version": "0.1.0",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "concurrently \"npm run backend\" \"npm run electron\"",
+    "dev": "concurrently \"npm run electron\" \"npm run react\"",
     "electron": "electron .",
-    "backend": "cd backend && python app.py"
+    "react": "cd src && vite"
   },
-  "author": "donghyeong lee",
-  "license": "MIT",
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "^6.30.1"
+  },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
     "concurrently": "^8.2.2",
-    "electron": "^29.4.6"
-  },
-  "keywords": [],
-  "type": "commonjs"
+    "electron": "^36.3.2",
+    "electron-builder": "^24.0.0",
+    "vite": "^5.0.0"
+  }
 }

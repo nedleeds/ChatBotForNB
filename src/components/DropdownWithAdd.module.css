@@ -1,0 +1,73 @@
+.wrapper {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.label {
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+}
+
+.selectWrap {
+  display: flex;
+  align-items: center;
+}
+
+.select {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.plusBtn {
+  margin-left: 0.5rem;
+  background-color: transparent;
+  border: none;
+  font-size: 1.25rem;
+  color: #666;
+  cursor: pointer;
+}
+
+.plusBtn:hover {
+  color: #000;
+}
+
+.addForm {
+  display: flex;
+  align-items: center;
+}
+
+.addInput {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+}
+
+.addBtn,
+.cancelBtn {
+  margin-left: 0.5rem;
+  background-color: #007bff;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cancelBtn {
+  background-color: #dc3545;
+}
+
+.addBtn:hover {
+  background-color: #0056b3;
+}
+
+.cancelBtn:hover {
+  background-color: #c82333;
+}

@@ -1,0 +1,54 @@
+.container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  font-family: 'sans-serif';
+  margin: 0;
+  /* body margin 제거가 안 됐다면 안전하게 여기서도 한 번 더 */
+  padding: 0;
+}
+
+.leftPanel {
+  flex: 1;
+  background-image: url('/images/00_login_background.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  z-index: 0;
+}
+
+.overlay {
+  position: absolute;
+  top: 30%;
+  left: 10%;
+  z-index: 1;
+  color: white;
+  word-break: keep-all;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.logo {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 1.25rem;
+  font-weight: 300;
+  line-height: 1.4;
+}
+
+.rightPanel {
+  flex: 1;
+  background-color: #f0f0f5;
+  /* 은은한 회색 배경 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
