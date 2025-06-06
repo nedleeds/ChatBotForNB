@@ -23,6 +23,7 @@ export default function ChatbotPage() {
   const [companies, setCompanies] = useState([]);
   const [teams, setTeams] = useState([]);
   const [parts, setParts] = useState([]);
+  const [controlsDisabled, setControlsDisabled] = useState(false);
 
   // ── 사용자가 선택한 회사/팀/파트/사번 ──
   const [selectedCompany, setSelectedCompany] = useState('');
@@ -217,6 +218,7 @@ export default function ChatbotPage() {
           lastTrainedAt: chatbotObj.lastTrainedAt,
         };
         localStorage.setItem(metaKey, JSON.stringify(metaValue));
+        setControlsDisabled(true);
       } else {
         alert('챗봇 불러오기 실패: ' + result.error);
       }
@@ -288,6 +290,7 @@ export default function ChatbotPage() {
 
   // ── 11) 드롭다운(회사/팀/파트/사번) 변경 핸들러 ──
   const onChangeCompany = (e) => {
+    if (controlsDisabled) return;
     const company = e.target.value;
     setSelectedCompany(company);
     setSelectedTeam('');
@@ -315,6 +318,7 @@ export default function ChatbotPage() {
   };
 
   const onChangeTeam = (e) => {
+    if (controlsDisabled) return;
     const team = e.target.value;
     setSelectedTeam(team);
     setSelectedPart('');
@@ -344,6 +348,7 @@ export default function ChatbotPage() {
   };
 
   const onChangePart = (e) => {
+    if (controlsDisabled) return;
     const part = e.target.value;
     setSelectedPart(part);
 
@@ -410,6 +415,7 @@ export default function ChatbotPage() {
             className={styles.darkSelect}
             value={selectedCompany}
             onChange={onChangeCompany}
+            disabled={controlsDisabled}
           >
             <option value="" disabled>
               회사 선택
@@ -426,7 +432,7 @@ export default function ChatbotPage() {
             className={styles.darkSelect}
             value={selectedTeam}
             onChange={onChangeTeam}
-            disabled={!selectedCompany}
+            disabled={controlsDisabled}
           >
             <option value="" disabled>
               팀 선택
@@ -443,7 +449,7 @@ export default function ChatbotPage() {
             className={styles.darkSelect}
             value={selectedPart}
             onChange={onChangePart}
-            disabled={!selectedTeam}
+            disabled={controlsDisabled}
           >
             <option value="" disabled>
               파트 선택
@@ -488,6 +494,7 @@ export default function ChatbotPage() {
                 lastTrainedAt={matched.lastTrainedAt}
                 onClose={() => {
                   setActiveChatbot(null);
+                  setControlsDisabled(false);
                 }}
               />
             );
