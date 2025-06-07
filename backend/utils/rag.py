@@ -1,14 +1,17 @@
 # backend/utils/rag.py
-
+import re
 import os
-from typing import List, Dict, Any
+import json
 
+from typing import List, Dict, Any, Optional
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents.base import Document
 from langchain.prompts import PromptTemplate
-from langchain_core.runnables import Runnable          # ← 이 부분 추가
+from langchain_core.runnables import Runnable  # ← 이 부분 추가
 from langchain.schema.output_parser import StrOutputParser
+from pydantic import BaseModel
+from fastapi import HTTPException
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
@@ -36,9 +39,7 @@ def get_rag_chain() -> Runnable:
 
 
 def process_question(
-    user_question: str,
-    index_dir: str,
-    top_k: int = 3
+    user_question: str, index_dir: str, top_k: int = 3
 ) -> Dict[str, Any]:
     """
     1) FAISS 인덱스 로드
@@ -77,12 +78,14 @@ def process_question(
             context_parts.append(f"[{pdf_name}]\n{text}")
 
         # 3-3) sources 리스트에 리턴할 딕셔너리
-        sources.append({
-            "pdf_name": pdf_name,
-            "page": page_no,
-            "text": text,
-            "image_path": image_path
-        })
+        sources.append(
+            {
+                "pdf_name": pdf_name,
+                "page": page_no,
+                "text": text,
+                "image_path": image_path,
+            }
+        )
 
     # 3-4) context를 한 문자열로 합치기 (페이지별로 두 줄 띄어쓰기)
     context_str = "\n\n".join(context_parts)
@@ -93,7 +96,70 @@ def process_question(
     answer = result.strip()
 
     # 5) 최종 리턴
-    return {
-        "answer": answer,
-        "sources": sources
-    }
+    return {"answer": answer, "sources": sources}
+
+
+class MCQItem(BaseModel):
+    id: Optional[int] = None
+    question: str
+    choices: List[str]
+    answerIndex: int
+
+
+def generate_mc_questions(index_dir: str, n_questions: int = 5) -> List[MCQItem]:
+    """
+    FAISS 인덱스에서 상위 컨텍스트를 추출하여,
+    객관식 문제를 생성합니다.
+    """
+    # 1) FAISS 인덱스 로드 및 retriever
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    db = FAISS.load_local(index_dir, embeddings, allow_dangerous_deserialization=True)
+    retriever = db.as_retriever(search_kwargs={"k": 3})
+    docs: List[Document] = retriever.get_relevant_documents("")
+
+    # 2) 컨텍스트 합치기
+    context = "\n\n".join(doc.page_content for doc in docs)
+
+    # 3) MCQ 생성 프롬프트 구성 (예시 JSON 중괄호 이스케이프)
+    prompt_tpl = """
+    다음 컨텍스트를 바탕으로 객관식 4지선다 문제 {n}개를 JSON 형식으로 생성하세요.
+    출력 형식 예시:
+    [  {{ "question": "예시 질문?", "choices": ["A","B","C","D"], "answerIndex": 2 }}  , … ]
+
+    컨텍스트:
+    {context}
+    """
+
+    prompt = PromptTemplate.from_template(prompt_tpl)
+
+    # 4) LLM 체인 실행
+    chain: Runnable = (
+        prompt | ChatOpenAI(model="gpt-4o-mini", temperature=0.7) | StrOutputParser()
+    )
+
+    try:
+        raw = chain.invoke({"context": context, "n": n_questions})
+        cleaned = re.sub(r"```[^\n]*\n", "", raw)
+        cleaned = cleaned.replace("```", "")
+        json_str = cleaned.strip()
+        items = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        # 디버깅: LLM 응답과 정제된 문자열을 로그에 남기고 예외 던짐
+        print("❌ Failed to parse JSON. raw:", repr(raw))
+        print("❌ Cleaned JSON str:", json_str)
+        raise HTTPException(
+            status_code=500, detail="MCQ 생성 실패 (잘못된 JSON 응답)"
+        ) from e
+        
+    # 5) 데이터 모델링
+    mcqs: List[MCQItem] = []
+    for idx, item in enumerate(items, start=1):
+        mcqs.append(
+            MCQItem(
+                id=idx,
+                question=item.get("question"),
+                choices=item.get("choices", []),
+                answerIndex=item.get("answerIndex", 0),
+            )
+        )
+    return mcqs

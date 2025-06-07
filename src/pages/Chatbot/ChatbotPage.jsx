@@ -550,9 +550,11 @@ export default function ChatbotPage() {
                         {/* 자가평가 버튼 */}
                         <button
                           className={styles.retrainButton}
-                          // onClick={() => setSelfTestBot(c.name)}
                           onClick={() => navigate('/self-test', {
                             state: {
+                              company: loginData.company,
+                              team: loginData.team,
+                              part: loginData.part,
                               chatbotName: c.name,
                               evaluatorID: loginData.employeeID,
                             }
