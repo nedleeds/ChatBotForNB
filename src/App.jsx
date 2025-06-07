@@ -2,6 +2,7 @@ import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/Login/LoginPage';
 import ChatbotPage from './pages/Chatbot/ChatbotPage';
+import SelfTestPage from './pages/Chatbot/SelfTestPage';
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
 
         {/* 챗봇 화면 */}
         <Route path="/chatbot" element={<ChatbotPage />} />
+        <Route path="/self-test" element={<SelfTestPage/>}/>
 
         {/* 그 외 존재하지 않는 경로는 다시 로그인으로 */}
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import SelfTestPage from './SelfTestPage';
 import DialogPage from './DialogPage'; // DialogPage import
 import styles from './chatbot.module.css';
 
 export default function ChatbotPage() {
   const navigate = useNavigate();
-
+  const [selfTestBot, setSelfTestBot] = useState(null);
   // ── 0) 로그인 정보 ──
   const [loginData, setLoginData] = useState({
     company: '',
@@ -549,29 +550,13 @@ export default function ChatbotPage() {
                         {/* 자가평가 버튼 */}
                         <button
                           className={styles.retrainButton}
-                          onClick={async () => {
-                            try {
-                              setLoadingTrain(true);
-                              const result = await window.electronAPI.retrainChatbot(
-                                c.name
-                              );
-                              if (result.success) {
-                                alert(`"${c.name}" 챗봇이 자가평가 되었습니다.`);
-                                fetchChatbotList(
-                                  selectedCompany,
-                                  selectedTeam,
-                                  selectedPart
-                                );
-                              } else {
-                                alert('챗봇 자가평가 실패: ' + result.error);
-                              }
-                            } catch (err) {
-                              console.error('챗봇 자가평가 에러:', err);
-                              alert('챗봇 자가평가 중 오류가 발생했습니다.');
-                            } finally {
-                              setLoadingTrain(false);
+                          // onClick={() => setSelfTestBot(c.name)}
+                          onClick={() => navigate('/self-test', {
+                            state: {
+                              chatbotName: c.name,
+                              evaluatorID: loginData.employeeID,
                             }
-                          }}
+                          })}
                         >
                           자가평가
                         </button>
