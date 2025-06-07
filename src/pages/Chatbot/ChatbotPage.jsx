@@ -522,12 +522,19 @@ export default function ChatbotPage() {
                       </div>
                       <div className={styles.cardMeta}>
                         <div>
-                          <strong>생성:</strong>{' '}
-                          {new Date(c.createdAt).toLocaleString()}
-                        </div>
-                        <div>
                           <strong>마지막 학습:</strong>{' '}
-                          {new Date(c.lastTrainedAt).toLocaleString()}
+                          {(() => {
+                            const d = new Date(c.lastTrainedAt);
+                            const yy = String(d.getFullYear()).slice(2);
+                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                            const dd = String(d.getDate()).padStart(2, '0');
+                            const rawHour = d.getHours();
+                            const ampm = rawHour < 12 ? 'AM' : 'PM';
+                            const hour12 = String(rawHour % 12 || 12).padStart(2, '0');
+                            const mi = String(d.getMinutes()).padStart(2, '0');
+
+                            return `${yy}:${mm}:${dd} ${hour12}:${mi} ${ampm}`;
+                          })()}
                         </div>
                       </div>
                       <div className={styles.cardActions}>
@@ -539,7 +546,7 @@ export default function ChatbotPage() {
                           불러오기
                         </button>
 
-                        {/* 추가학습 버튼 */}
+                        {/* 자가평가 버튼 */}
                         <button
                           className={styles.retrainButton}
                           onClick={async () => {
@@ -549,24 +556,24 @@ export default function ChatbotPage() {
                                 c.name
                               );
                               if (result.success) {
-                                alert(`"${c.name}" 챗봇이 추가학습 되었습니다.`);
+                                alert(`"${c.name}" 챗봇이 자가평가 되었습니다.`);
                                 fetchChatbotList(
                                   selectedCompany,
                                   selectedTeam,
                                   selectedPart
                                 );
                               } else {
-                                alert('챗봇 추가학습 실패: ' + result.error);
+                                alert('챗봇 자가평가 실패: ' + result.error);
                               }
                             } catch (err) {
-                              console.error('챗봇 추가학습 에러:', err);
-                              alert('챗봇 추가학습 중 오류가 발생했습니다.');
+                              console.error('챗봇 자가평가 에러:', err);
+                              alert('챗봇 자가평가 중 오류가 발생했습니다.');
                             } finally {
                               setLoadingTrain(false);
                             }
                           }}
                         >
-                          추가학습
+                          자가평가
                         </button>
                       </div>
                     </div>

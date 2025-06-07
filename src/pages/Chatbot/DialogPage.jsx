@@ -177,7 +177,7 @@ export default function DialogPage(props) {
             {chatbotName || '이름 없음'}
           </span>
           <span className={styles.headerMeta}>
-            생성: {formatDateTime(createdAt)} | 마지막 학습: {formatDateTime(lastTrainedAt)}
+            마지막학습: {formatDateTime(lastTrainedAt)}
           </span>
         </div>
       </div>
