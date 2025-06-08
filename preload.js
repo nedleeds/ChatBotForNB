@@ -7,7 +7,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   //
   loadLogin: () => ipcRenderer.invoke('login:load'),
   saveLogin: (newLoginData) => ipcRenderer.invoke('login:save', newLoginData),
-
+  fetchLoginOptions: (params) => ipcRenderer.invoke('login:search', params),
+  addCompany: (payload) => ipcRenderer.invoke('add:company', payload),
+  addTeam: (payload) => ipcRenderer.invoke('add:team', payload),
+  addPart: (payload) => ipcRenderer.invoke('add:part', payload),
+  loginSubmit: (info) => ipcRenderer.invoke('login:submit', info),
+  loginSubmit: (loginInfo) => ipcRenderer.invoke('login:submit', loginInfo),
   //
   // 2) 챗봇 목록 조회 (chatbot:getList)
   //

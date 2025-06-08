@@ -1,73 +1,141 @@
-.wrapper {
-  margin-bottom: 1rem;
-  display: flex;
-  flex-direction: column;
+/* 컨테이너: inline-block으로 텍스트 기반 폭 */
+.dropdownContainer {
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
 }
 
+/* 라벨 */
 .label {
-  margin-bottom: 0.25rem;
-  font-weight: 500;
+  display: block;
+  margin-bottom: 4px;
+  color: #eee;
+  font-size: 0.9rem;
 }
 
-.selectWrap {
-  display: flex;
+/* ─────────────────────────────────────────────────────────────────────────────
+   토글 버튼 기본 스타일 (auto 폭)
+───────────────────────────────────────────────────────────────────────────── */
+.toggleButton {
+  display: inline-flex;
   align-items: center;
-}
+  justify-content: space-between;
 
-.select {
-  flex: 1;
-  padding: 0.5rem;
+  width: auto;
+  /* 텍스트 길이만큼 */
+  min-width: 6rem;
+  /* 최소 너비 */
+  padding: 0.4rem 1rem;
+  /* 6.4px × 16px */
+
   font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
+  /* 리스트와 동일하게 */
+  line-height: 1.4;
 
-.plusBtn {
-  margin-left: 0.5rem;
-  background-color: transparent;
-  border: none;
-  font-size: 1.25rem;
-  color: #666;
+  background: rgba(90, 90, 95, 0.14);
+  border: 0px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
   cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
 }
 
-.plusBtn:hover {
-  color: #000;
+/* hover 효과 */
+.toggleButton:hover {
+  background: rgba(40, 40, 45, 1);
 }
 
-.addForm {
+/* fullWidth 플래그 시 적용 */
+.fullWidth {
+  display: flex !important;
+  width: 100% !important;
+}
+
+/* disabled 상태 */
+.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 텍스트와 화살표 */
+.toggleText {
+  color: #eee;
+}
+
+/* 화살표 크기도 조정 */
+.arrow {
+  margin-left: 0.5rem;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #aaa;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   드롭다운 메뉴
+───────────────────────────────────────────────────────────────────────────── */
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: rgba(30, 30, 35, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1001;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   메뉴 아이템 (토글 버튼과 동일한 높이/폰트)
+───────────────────────────────────────────────────────────────────────────── */
+.menuItem {
+  padding: 0.4rem 1rem;
+  /* 버튼과 동일 */
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #eee;
+  cursor: pointer;
+  z-index: 1001;
+}
+
+.menuItem:hover {
+  background: rgba(255, 255, 255, 0.05);
+  z-index: 1001;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   추가 섹션
+───────────────────────────────────────────────────────────────────────────── */
+.addSection {
   display: flex;
-  align-items: center;
+  padding: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .addInput {
   flex: 1;
-  padding: 0.5rem;
-  font-size: 1rem;
-  border: 1px solid #aaa;
+  padding: 0.25rem;
+  background: rgba(20, 20, 25, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
+  color: #eee;
+  font-size: 0.9rem;
 }
 
-.addBtn,
-.cancelBtn {
+.addButton {
   margin-left: 0.5rem;
-  background-color: #007bff;
+  padding: 0.25rem 0.5rem;
+  background: #00e676;
+  color: #000;
   border: none;
-  color: white;
-  font-size: 1rem;
-  padding: 0.3rem 0.6rem;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 0.9rem;
 }
 
-.cancelBtn {
-  background-color: #dc3545;
-}
-
-.addBtn:hover {
-  background-color: #0056b3;
-}
-
-.cancelBtn:hover {
-  background-color: #c82333;
+.addButton:disabled {
+  background: #555;
+  cursor: not-allowed;
 }

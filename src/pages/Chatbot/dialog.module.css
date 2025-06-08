@@ -5,8 +5,8 @@
 ──────────────────────────────────────────────────────────────────────────── */
 :root {
   --bg-dark: #181a1b;
-  --bg-header: #202224;
-  --bg-input: #202224;
+  --bg-header: rgba(22, 24, 28, 0.75);
+  --bg-input: rgba(255, 255, 255, 0.06);
   /* 수정: 입력창 배경을 헤더와 동일하게끔 미리 설정 */
   --bg-bubble-user: #1f6feb;
   --bg-bubble-bot: #383a3c;
@@ -298,7 +298,8 @@
   /* 우측 RetrievalPanel이 나타나면 자동으로 너비가 줄어들고, 사라지면 전체를 차지 */
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-dark);
+  /* background-color: var(--bg-dark); */
+  background-color: rgba(40, 42, 54, 0.15);
 }
 
 /* 우측: Retrieval 패널 */

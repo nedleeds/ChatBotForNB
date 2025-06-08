@@ -1,366 +1,256 @@
 // src/pages/Login/LoginPage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DropdownWithAdd from '../../components/DropdownWithAdd';
 import styles from './login.module.css';
 
 export default function LoginPage() {
-  // 1) login.json 전체 객체 (employeeList 필드 포함)
-  const [loginData, setLoginData] = useState({
-    company: '',
-    team: '',
-    part: '',
-    data: {},
-    employeeID: '',
-    employeeList: [],
-  });
+  const navigate = useNavigate();
+  const STORAGE_KEY = 'loginData';
 
-  // 2) 드롭다운 목록
-  const [companies, setCompanies] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [parts, setParts] = useState([]);
-  const [employeeList, setEmployeeList] = useState([]);
+  // ── 1) FastAPI로부터 받아올 전체 트리 구조 ──
+  const [tree, setTree] = useState([]); // CompanyOption[]
 
-  // 3) 사용자 선택값
+  // ── 2) 선택값 ──
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedPart, setSelectedPart] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
 
-  const STORAGE_KEY = 'loginSelections';
-  const navigate = useNavigate();
-
-  // ──── 앱 마운트 시: localStorage 우선 → login.json 불러오기 ────
+  // ── 3) 마운트 시 로그인 옵션(fetchLoginOptions) 가져오기 ──
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    async function fetchOptions() {
       try {
-        const { company, team, part, employeeID } = JSON.parse(saved);
-        setSelectedCompany(company || '');
-        setSelectedTeam(team || '');
-        setSelectedPart(part || '');
-        setSelectedEmployee(employeeID || '');
+        const { companies } = await window.electronAPI.fetchLoginOptions({});
+        setTree(companies);
       } catch (err) {
-        console.warn('JSON 파싱 실패:', err);
+        console.error('로그인 옵션 로드 실패:', err);
       }
     }
-
-    window.electronAPI.loadLogin().then((data) => {
-      console.log('▶ loadLogin 결과:', data);
-      setLoginData(data);
-
-      // 1) 전체 company 목록 세팅
-      const compList = Object.keys(data.data || {});
-      setCompanies(compList);
-
-      // 2) 현재 login.json에 company/team/part/employeeID가 있으면, 화면에도 반영
-      //    - 로컬 스토리지에 있던 값(saved) 보다 우선하지 않고, 
-      //      항상 file(data) 에 있는 값으로 세팅하도록 한다.
-      const activeCompany = data.company || '';
-      const activeTeam = data.team || '';
-      const activePart = data.part || '';
-      const activeEmployee = data.employeeID || '';
-
-      setSelectedCompany(activeCompany);
-      setSelectedTeam(activeTeam);
-      setSelectedPart(activePart);
-      setSelectedEmployee(activeEmployee);
-
-      // 3) teams 목록
-      if (activeCompany && data.data[activeCompany]) {
-        const teamList = Object.keys(data.data[activeCompany]);
-        setTeams(teamList);
-      } else {
-        setTeams([]);
-      }
-
-      // 4) parts 목록
-      if (
-        activeCompany &&
-        activeTeam &&
-        data.data[activeCompany] &&
-        data.data[activeCompany][activeTeam]
-      ) {
-        setParts(data.data[activeCompany][activeTeam]);
-      } else {
-        setParts([]);
-      }
-
-      // 5) employeeList 목록
-      if (Array.isArray(data.employeeList)) {
-        setEmployeeList(data.employeeList);
-      } else {
-        console.warn('employeeList가 배열이 아님:', data.employeeList);
-        setEmployeeList([]);
-      }
-    });
+    fetchOptions();
   }, []);
 
-  // ──── 로그인 정보 저장(로컬스토리지 + userData/login.json) ────
-  const saveAll = (newLoginData) => {
-    console.log('▶ saveAll 호출, newLoginData=', newLoginData);
+  // ── 4) tree로부터 각 레벨별 옵션 계산(useMemo) ──
+  const companyOptions = useMemo(
+    () => tree.map(c => c.name),
+    [tree]
+  );
 
-    // 1) localStorage에 company/team/part/employeeID 저장
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        company: newLoginData.company,
-        team: newLoginData.team,
-        part: newLoginData.part,
-        employeeID: newLoginData.employeeID,
-      })
-    );
+  const teamOptions = useMemo(() => {
+    const comp = tree.find(c => c.name === selectedCompany);
+    return comp ? comp.teams.map(t => t.name) : [];
+  }, [tree, selectedCompany]);
 
-    // 2) React state 및 userData/login.json 파일 덮어쓰기
-    setLoginData(newLoginData);
-    window.electronAPI.saveLogin(newLoginData);
-  };
+  const partOptions = useMemo(() => {
+    const comp = tree.find(c => c.name === selectedCompany);
+    const team = comp?.teams.find(t => t.name === selectedTeam);
+    return team ? team.parts.map(p => p.name) : [];
+  }, [tree, selectedCompany, selectedTeam]);
+  const employeeOptions = useMemo(() => {
+    const comp = tree.find(c => c.name === selectedCompany);
+    const team = comp?.teams.find(t => t.name === selectedTeam);
+    const part = team?.parts.find(p => p.name === selectedPart);
+    return part ? part.employees : [];
+  }, [tree, selectedCompany, selectedTeam, selectedPart]);
 
-  // ──── 드롭다운(onSelect) 핸들러들 ────
-  const onSelectCompany = (company) => {
-    console.log('▶ onSelectCompany:', company);
-    setSelectedCompany(company);
+  // ── 5) 셀렉터 변경 핸들러 ──
+  const onSelectCompany = name => {
+    setSelectedCompany(name);
     setSelectedTeam('');
     setSelectedPart('');
-
-    // 해당 회사의 팀 목록
-    const teamList = Object.keys(loginData.data[company] || {});
-    setTeams(teamList);
-    setParts([]);
-
-    // loginData 속성 업데이트
-    const newLD = {
-      ...loginData,
-      company,
-      team: '',
-      part: '',
-      employeeID: selectedEmployee,
-    };
-    saveAll(newLD);
+    setSelectedEmployee('');
   };
-
-  const onSelectTeam = (team) => {
-    console.log('▶ onSelectTeam:', team);
-    setSelectedTeam(team);
+  const onSelectTeam = name => {
+    setSelectedTeam(name);
     setSelectedPart('');
-
-    // 해당 (company → team)의 파트 목록
-    const partList = (loginData.data[selectedCompany] || {})[team] || [];
-    setParts(partList);
-
-    const newLD = {
-      ...loginData,
-      company: selectedCompany,
-      team,
-      part: '',
-      employeeID: selectedEmployee,
-    };
-    saveAll(newLD);
+    setSelectedEmployee('');
   };
+  const onSelectPart = name => {
+    setSelectedPart(name);
+    setSelectedEmployee('');
+  };
+  const onSelectEmployee = id => setSelectedEmployee(id);
 
-  const onSelectPart = (part) => {
-    console.log('▶ onSelectPart:', part);
-    setSelectedPart(part);
+  // ── 6) 로그인 버튼 클릭 시 처리 ──
+  const handleLogin = async () => {
+    if (!selectedCompany || !selectedTeam || !selectedPart || !selectedEmployee) {
+      alert('모든 정보를 선택/입력해주세요.');
+      return;
+    }
 
-    const newLD = {
-      ...loginData,
+    // 로그인 정보 + 전체 트리 + 현재 사번 리스트를 함께 저장
+    const loginInfo = {
       company: selectedCompany,
       team: selectedTeam,
-      part,
+      part: selectedPart,
       employeeID: selectedEmployee,
+      data: tree,
     };
-    saveAll(newLD);
-  };
 
-  const onSelectEmployee = (eid) => {
-    console.log('▶ onSelectEmployee:', eid);
-    setSelectedEmployee(eid);
+    try {
+      // 백엔드에도 저장
+      await window.electronAPI.loginSubmit({
+        company: selectedCompany,
+        team: selectedTeam,
+        part: selectedPart,
+        employeeID: selectedEmployee
+      });
 
-    const newLD = {
-      ...loginData,
-      employeeID: eid,
-    };
-    saveAll(newLD);
-  };
+      // 로컬스토리지에 통째로 저장
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(loginInfo));
 
-  // ──── 새 사번 추가(체크) 핸들러 ────
-  const handleAddEmployee = (newEid) => {
-    console.log('▶ handleAddEmployee:', newEid);
-
-    // loginData.employeeList가 배열인지 먼저 확인, 아니면 빈 배열로 처리
-    const baseList = Array.isArray(loginData.employeeList)
-      ? loginData.employeeList
-      : [];
-
-    // 새로운 사번이 baseList에 없는 경우에만 추가
-    if (!baseList.includes(newEid)) {
-      const updatedEmpList = [...baseList, newEid];
-
-      // 새로운 loginData 객체 생성
-      const newLD = {
-        ...loginData,
-        employeeList: updatedEmpList,
-        employeeID: newEid,
-      };
-      console.log('▶ handleAddEmployee → newLD:', newLD);
-
-      // React state 동기화
-      setLoginData(newLD);
-      setEmployeeList(updatedEmpList);
-      setSelectedEmployee(newEid);
-
-      // 로컬스토리지와 login.json 파일에 저장
-      saveAll(newLD);
-    } else {
-      console.log(`▶ 사번 "${newEid}" 이미 목록에 존재합니다.`);
+      navigate('/chatbot');
+    } catch (err) {
+      console.error('로그인 저장 실패:', err);
+      alert('로그인 저장에 실패했습니다.');
     }
   };
+
+  const handleAddItem = async (level, newValue) => {
+    try {
+      switch (level) {
+        case 'company':
+          await window.electronAPI.addCompany({ company: newValue });
+          setTree(prev => [...prev, { name: newValue, teams: [] }]);
+          setSelectedCompany(newValue);
+          setSelectedTeam('');
+          setSelectedPart('');
+          setSelectedEmployee('');
+          break;
+
+        case 'team':
+          await window.electronAPI.addTeam({
+            company: selectedCompany,
+            team: newValue
+          });
+          setTree(prev => prev.map(c =>
+            c.name === selectedCompany
+              ? { ...c, teams: [...c.teams, { name: newValue, parts: [] }] }
+              : c
+          ));
+          setSelectedTeam(newValue);
+          setSelectedPart('');
+          setSelectedEmployee('');
+          break;
+
+        case 'part':
+          await window.electronAPI.addPart({
+            company: selectedCompany,
+            team: selectedTeam,
+            part: newValue
+          });
+
+          setTree(prev => prev.map(c =>
+            c.name === selectedCompany
+              ? {
+                ...c,
+                teams: c.teams.map(t =>
+                  t.name === selectedTeam
+                    ? { ...t, parts: [...t.parts, { name: newValue, employees: [] }] }
+                    : t
+                )
+              }
+              : c
+          ));
+          setSelectedPart(newValue);
+          setSelectedEmployee('');
+          break;
+
+        case 'employee':
+          await window.electronAPI.loginSubmit({
+            company: selectedCompany,
+            team: selectedTeam,
+            part: selectedPart,
+            employeeID: newValue
+          });
+          setTree(prev => prev.map(c =>
+            c.name === selectedCompany
+              ? {
+                ...c,
+                teams: c.teams.map(t =>
+                  t.name === selectedTeam
+                    ? {
+                      ...t,
+                      parts: t.parts.map(p =>
+                        p.name === selectedPart
+                          ? { ...p, employees: [...p.employees, newValue] }
+                          : p
+                      )
+                    }
+                    : t
+                )
+              }
+              : c
+          ));
+          setSelectedEmployee(newValue);
+          break;
+
+        default:
+          throw new Error('Unknown level: ' + level);
+      }
+    } catch (err) {
+      console.error(`추가 오류 (${level}):`, err);
+      alert(`${level} 추가에 실패했습니다:\n${err.message}`);
+    }
+  };
+
 
   return (
     <div className={styles.container}>
-      {/* 좌측 패널 (배경 + 문구) */}
+      {/* 왼쪽 배경 + 슬로건 */}
       <div className={styles.leftPanel}>
-        <div className={styles.overlay}>
+        <div className={styles.leftOverlay}>
           <h1 className={styles.logo}>HD현대</h1>
-          <p className={styles.subtitle}>신입사원 교육용 챗봇 프로그램</p>
+          <p className={styles.slogan}>
+            챗봇과 함께 성장하는 내일
+          </p>
         </div>
       </div>
 
-      {/* 우측 패널 (회사 → 팀 → 파트 → 사번 순서) */}
-      <div className={styles.rightPanel}>
-        <h2 style={{ marginBottom: '1rem', color: '#333' }}>
-          로그인 정보 입력
-        </h2>
+      <div className={styles.loginCard}>
+        <h2 className={styles.formTitle}>시작하기</h2>
 
-        {/* 1) 회사 드롭다운 */}
         <DropdownWithAdd
           label="회사"
-          items={companies}
+          items={companyOptions}
           selected={selectedCompany}
-          onAdd={(newCompany) => {
-            console.log('▶ 새 회사 추가:', newCompany);
-            const updatedData = { ...loginData.data, [newCompany]: {} };
-            const newLD = {
-              ...loginData,
-              data: updatedData,
-              company: newCompany,
-              team: '',
-              part: '',
-              employeeID: selectedEmployee,
-            };
-            setLoginData(newLD);
-            setCompanies((prev) => [...prev, newCompany]);
-            setSelectedCompany(newCompany);
-            setTeams([]);
-            setParts([]);
-            saveAll(newLD);
-          }}
           onSelect={onSelectCompany}
+          disabled={false}
+          fullWidth={true}
+          onAdd={name => handleAddItem('company', name)}
         />
 
-        {/* 2) 팀 드롭다운 */}
         <DropdownWithAdd
           label="팀"
-          items={teams}
+          items={teamOptions}
           selected={selectedTeam}
-          onAdd={(newTeam) => {
-            console.log('▶ 새 팀 추가:', newTeam);
-            const updatedCompanyObj = {
-              ...(loginData.data[selectedCompany] || {}),
-              [newTeam]: [],
-            };
-            const updatedData = {
-              ...loginData.data,
-              [selectedCompany]: updatedCompanyObj,
-            };
-            const newLD = {
-              ...loginData,
-              data: updatedData,
-              company: selectedCompany,
-              team: newTeam,
-              part: '',
-              employeeID: selectedEmployee,
-            };
-            setLoginData(newLD);
-            setTeams((prev) => [...prev, newTeam]);
-            setSelectedTeam(newTeam);
-            setParts([]);
-            saveAll(newLD);
-          }}
           onSelect={onSelectTeam}
+          disabled={!selectedCompany}
+          onAdd={name => handleAddItem('team', name)}
+          fullWidth={true}
         />
 
-        {/* 3) 파트 드롭다운 */}
         <DropdownWithAdd
           label="파트"
-          items={parts}
+          items={partOptions}
           selected={selectedPart}
-          onAdd={(newPart) => {
-            console.log('▶ 새 파트 추가:', newPart);
-            const updatedPartsArray = [
-              ...(loginData.data[selectedCompany]?.[selectedTeam] || []),
-              newPart,
-            ];
-            const updatedCompanyObj = {
-              ...loginData.data[selectedCompany],
-              [selectedTeam]: updatedPartsArray,
-            };
-            const updatedData = {
-              ...loginData.data,
-              [selectedCompany]: updatedCompanyObj,
-            };
-            const newLD = {
-              ...loginData,
-              data: updatedData,
-              company: selectedCompany,
-              team: selectedTeam,
-              part: newPart,
-              employeeID: selectedEmployee,
-            };
-            setLoginData(newLD);
-            setParts(updatedPartsArray);
-            setSelectedPart(newPart);
-            saveAll(newLD);
-          }}
           onSelect={onSelectPart}
+          disabled={!selectedTeam}
+          onAdd={name => handleAddItem('part', name)}
+          fullWidth={true}
         />
 
-        {/* 4) 사번 드롭다운 (맨 하단) */}
         <DropdownWithAdd
           label="사번"
-          items={employeeList}
+          items={employeeOptions}
           selected={selectedEmployee}
-          onAdd={handleAddEmployee}
           onSelect={onSelectEmployee}
+          disabled={!selectedPart}
+          onAdd={name => handleAddItem('employee', name)}
+          fullWidth={true}
         />
 
-        <button
-          onClick={() => {
-            if (
-              !selectedCompany ||
-              !selectedTeam ||
-              !selectedPart ||
-              !selectedEmployee
-            ) {
-              alert('사번, 회사, 팀, 파트를 모두 입력/선택해주세요.');
-              return;
-            }
-
-            //   `로그인 성공!\n사번: ${selectedEmployee}\n회사: ${selectedCompany}\n팀: ${selectedTeam}\n파트: ${selectedPart}`
-            // );
-            navigate('/chatbot');
-          }}
-          style={{
-            marginTop: '2rem',
-            padding: '0.75rem 1.5rem',
-            fontSize: '1rem',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+        <button onClick={handleLogin} className={styles.loginButton}>
           로그인
         </button>
       </div>

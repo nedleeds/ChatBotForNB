@@ -1,0 +1,79 @@
+[
+  {
+    "id": 2,
+    "question": "로봇 언어에서 'END' 명령어의 역할은 무엇인가요?",
+    "choices": [
+      "루프 종료",
+      "프로그램 종료",
+      "함수 호출",
+      "조건문 시작"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 3,
+    "question": "다음 중 모션 관련 명령어가 아닌 것은 무엇인가요?",
+    "choices": [
+      "SMOV",
+      "CONTPATH",
+      "GOTO",
+      "WAIT"
+    ],
+    "answerIndex": 2
+  },
+  {
+    "id": 4,
+    "question": "안전 관련 명령어 중에서 로봇 언어에서 사용되는 것은 무엇인가요?",
+    "choices": [
+      "ARCDC",
+      "WEAVCmd",
+      "TIMER",
+      "Collision"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 5,
+    "question": "아크 관련 명령어가 포함된 그룹은 무엇인가요?",
+    "choices": [
+      "모션",
+      "I/O",
+      "기타",
+      "핸들링"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 6,
+    "question": "다음 중 로봇 언어에서 흐름 제어와 관련된 명령어는 무엇인가요?",
+    "choices": [
+      "GOTO",
+      "MOVE",
+      "INPUT",
+      "WAIT"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 7,
+    "question": "로봇 언어에서 사용할 수 있는 수학 함수 중 하나는 무엇인가요?",
+    "choices": [
+      "SIN",
+      "TOOLCHNG",
+      "CalTVSft",
+      "SensorSync"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 8,
+    "question": "로봇 언어에서 모션 관련 명령어에 해당하지 않는 것은 무엇인가요?",
+    "choices": [
+      "SMOV",
+      "COLDET",
+      "CLEAR",
+      "ENDLESS"
+    ],
+    "answerIndex": 2
+  }
+]

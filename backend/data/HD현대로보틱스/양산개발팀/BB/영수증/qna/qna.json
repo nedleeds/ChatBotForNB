@@ -1,0 +1,57 @@
+[
+  {
+    "id": 1,
+    "question": "이 영수증의 결제 금액은 얼마인가요?",
+    "choices": [
+      "$5.00",
+      "$5.50",
+      "$6.00",
+      "$4.50"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 2,
+    "question": "이 영수증의 결제 방법은 무엇인가요?",
+    "choices": [
+      "MasterCard",
+      "Visa",
+      "American Express",
+      "Discover"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 3,
+    "question": "영수증의 청구인은 누구인가요?",
+    "choices": [
+      "OpenAI, LLC",
+      "DongHyeong Lee",
+      "San Francisco",
+      "Seoul"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 4,
+    "question": "부가세는 얼마인가요?",
+    "choices": [
+      "$0.50",
+      "$0.75",
+      "$1.00",
+      "$0.25"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 5,
+    "question": "영수증의 결제 날짜는 언제인가요?",
+    "choices": [
+      "June 5, 2025",
+      "May 5, 2025",
+      "July 5, 2025",
+      "April 5, 2025"
+    ],
+    "answerIndex": 0
+  }
+]

@@ -1,34 +1,111 @@
 /* src/pages/Chatbot/chatbot.module.css */
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   1. 전체 레이아웃
-───────────────────────────────────────────────────────────────────────────── */
-.container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background-color: #181a1b;
-  /* DialogPage 기본 배경과 동일 */
-  color: #eeeeee;
+:root {
+  --bg-dark: #0a0a0d;
+  --glass-bg: rgba(20, 20, 25, 0.1);
+  --glass-border: rgba(0, 230, 118, 0.1);
+  --glass-shadow: rgba(0, 230, 118, 0.0);
+  --accent-green: #00e676;
+  --text-primary: #eeeeee;
+  --text-secondary: #a0a0a0;
+  --radius-base: 12px;
+  --font-main: 'Noto Sans KR', sans-serif;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   2. 상단 헤더
-───────────────────────────────────────────────────────────────────────────── */
+/* 1. 전체 레이아웃 */
+.container {
+  /* 1) 배경 이미지 + 더 진한 단색 오버레이 */
+  background-image:
+    /* 알파를 0.8로 올려서 더 어둡게 */
+    linear-gradient(rgba(20, 22, 30, 1.8),
+      rgba(20, 22, 30, 1.8)),
+    url('/images/00_login_background.png');
+
+  /* 2) 이미지 설정 */
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+
+  /* 3) 블렌드 모드 (필요 없다면 제거해도 됩니다) */
+  background-blend-mode: overlay;
+
+  /* 기존 스타일 */
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  height: 100vh;
+}
+
 .header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
-  background-color: #2c2c2c;
-  /* 헤더 다크 톤 */
-  border-bottom: 1px solid #3a3a3a;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 12px var(--glass-shadow);
+}
+
+.fullWidth {
+  display: flex !important;
+  width: 100% !important;
+}
+
+.dropdownGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* 드롭다운 사이 간격 */
 }
 
 .fieldsRow {
   display: flex;
-  gap: 12px;
+  gap: 1rem;
+  flex: 1;
+}
+
+/* 3. 드롭다운 기본 스타일: 가로폭 fit-content 적용 */
+.fieldsRow select,
+.fieldsRow .dropdownContainer,
+.fieldsRow .employeeBox {
+  background: rgba(30, 30, 35, 0.1);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 0.25rem 0.75rem;
+  appearance: none;
+  width: fit-content;
+  min-width: 6rem;
+  /* 최소 너비 설정 */
+  display: inline-flex;
   align-items: center;
+}
+
+.fieldsRow select,
+.fieldsRow .employeeBox {
+  padding-right: 1.5rem;
+}
+
+.toggleButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+
+  width: auto;
+  /* ← 여기 auto */
+  min-width: 6rem;
+  /* 너무 작아지는 건 방지 */
+  /* padding: 0.5rem 0.75rem; */
+  background: rgba(40, 40, 45, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.3s;
+  flex-shrink: 0;
 }
 
 .darkSelect {
@@ -51,18 +128,19 @@
   text-align: center;
 }
 
+
 .logoutBtn {
-  padding: 6px 12px;
-  background-color: #e06c75;
+  padding: 0.5rem 1rem;
+  background: #e06c75;
   color: #ffffff;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
+  transition: background 0.2s ease;
 }
 
 .logoutBtn:hover {
-  background-color: #c65a62;
+  background: #c65a62;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -71,14 +149,14 @@
    • background-color을 DialogPage 기본 배경(#181a1b)과 동일하게 통일
    • 내부 padding/overflow는 DialogPage가 직접 처리하도록 남겨둠
 ───────────────────────────────────────────────────────────────────────────── */
+
 .chatbotBody {
-  display: flex;
-  flex-direction: column;
   flex: 1;
-  background-color: #181a1b;
-  /* DialogPage 기본 배경과 통일 */
-  padding: 10px;
-  /* overflow-y: auto 제거 → DialogPage가 내부에 정확히 스크롤 구현 */
+  overflow-y: auto;
+  background: var(--bg-dark) transparent;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 1rem;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -100,50 +178,46 @@
 .chatbotListContainer {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(25%, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-  width: 100%;
-  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 0 1rem;
 }
 
 .chatbotCard {
   position: relative;
-  background-color: #2a2a2a;
-  border: 1px solid #3a3a3a;
-  border-radius: 8px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-  transition: transform 0.1s ease-in-out;
-  width: 25vw;
-  max-width: 400px;
-  margin: 0 auto;
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-base);
+  box-shadow: 0 4px 16px var(--glass-shadow);
+  padding: 1rem;
+  color: var(--text-primary);
+  transition: transform 0.1s ease;
 }
 
 .chatbotCard:hover {
   transform: translateY(-2px);
+  --glass-shadow: rgba(0, 230, 118, 0.2);
+  --glass-border: rgba(0, 230, 118, 0.3);
 }
 
 .cardHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 0.5rem;
 }
 
 .chatbotName {
   font-size: 1.2rem;
   font-weight: 600;
-  color: #ffffff;
 }
 
 .cardMeta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   font-size: 0.9rem;
-  color: #b0b0b0;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
 }
 
 .cardMeta strong {
@@ -152,68 +226,57 @@
 
 .cardActions {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 0.5rem;
 }
 
 .deleteButton {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 0.5rem;
+  right: 0.5rem;
   background: transparent;
   border: none;
-  color: #bbbbbb;
-  font-size: 1.2rem;
+  color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+  transition: color 0.2s ease;
 }
 
 .deleteButton:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #ff5555;
+  color: var(--accent-green);
 }
 
 .loadButton,
 .retrainButton {
   flex: 1;
-  background-color: #3a3a3a;
-  color: #ffffff;
+  padding: 0.5rem 0.75rem;
+  background: rgba(30, 30, 35, 0.8);
   border: none;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 0.9rem;
+  border-radius: 6px;
+  color: var(--text-primary);
   cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
+  transition: background 0.2s ease;
 }
 
-.loadButton:hover {
-  background-color: #4a90e2;
-}
-
-.retrainButton {
-  background-color: #5a5a5a;
-}
-
+.loadButton:hover,
 .retrainButton:hover {
-  background-color: #71828a;
+  background: rgba(30, 30, 35, 1);
 }
 
+/* 6. 업로드 버튼 */
 .uploadBtn {
   display: block;
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: #ffffff;
+  margin: 0 auto 2rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--accent-green);
+  color: var(--bg-dark);
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
-  margin: 0 auto 40px;
+  transition: box-shadow 0.2s ease, transform 0.1s ease;
 }
 
 .uploadBtn:hover {
-  background-color: #0069d9;
+  box-shadow: 0 4px 12px var(--glass-shadow);
+  transform: translateY(-2px);
 }
 
 .uploadBtn:disabled {
@@ -221,15 +284,16 @@
   cursor: not-allowed;
 }
 
+/* 7. 챗봇 없음 메시지 */
 .noChatbotContainer {
-  margin-top: 40px;
   text-align: center;
+  margin-top: 2rem;
+  color: var(--text-secondary);
 }
 
 .noChatbotMessage {
-  font-size: 1rem;
   color: #ffcccc;
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -349,47 +413,71 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    8. 모달 관련 스타일
 ───────────────────────────────────────────────────────────────────────────── */
+/* 8. 모달 오버레이 */
 .modalOverlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 9999;
+  z-index: 100;
 }
 
 .modalContent {
-  background-color: #282c34;
-  color: #ffffff;
-  padding: 20px 24px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-base);
+  padding: 2rem;
   width: 90%;
-  max-width: 400px;
-  text-align: center;
+  max-width: 360px;
+  color: var(--text-primary);
 }
 
-.nameInput {
+.modalContent h3 {
+  margin-bottom: 1rem;
+}
+
+.modalContent input {
   width: 100%;
-  padding: 8px 10px;
-  margin-top: 8px;
-  margin-bottom: 16px;
-  border: 1px solid #444;
-  border-radius: 4px;
-  background-color: #1e2228;
-  color: #fff;
-  font-size: 1rem;
+  padding: 0.75rem;
+  background: rgba(30, 30, 35, 0.8);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
 }
 
 .modalButtons {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
+
+.modalButtons button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.modalButtons .confirmButton {
+  background: var(--accent-green);
+  color: var(--bg-dark);
+}
+
+.modalButtons .confirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modalButtons .cancelButton {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+}
+
 
 .confirmButton,
 .cancelButton {
@@ -426,44 +514,63 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    9. 로딩 스피너 오버레이
 ───────────────────────────────────────────────────────────────────────────── */
+/* 9. 스피너 */
 .spinnerOverlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
-  align-items: center;
   justify-content: center;
-  z-index: 999;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
-    transform: rotate(360deg);
-  }
+  align-items: center;
+  z-index: 200;
 }
 
 .spinner {
-  border: 8px solid rgba(255, 255, 255, 0.3);
-  border-top: 8px solid #ffffff;
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-green);
   border-radius: 50%;
-  width: 64px;
-  height: 64px;
   animation: spin 1s linear infinite;
 }
 
 .loadingOverlayText {
-  position: absolute;
-  top: calc(50% + 50px);
-  color: #fff;
-  font-size: 18px;
-  text-align: center;
-  transform: translateX(-50%);
-  left: 50%;
+  margin-top: 1rem;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   1) 헤더를 최상단 레이어로 올리고, 스크롤해도 붙어 있도록 sticky 적용
+───────────────────────────────────────────────────────────────────────────── */
+.header {
+  position: sticky;    /* 또는 relative 로만 사용해도 됩니다 */
+  top: 0;
+  z-index: 1000;       /* 충분히 높은 값 */
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   2) 챗봇 본문을 그 아래 레이어로 낮추기
+───────────────────────────────────────────────────────────────────────────── */
+.chatbotBody {
+  position: relative;  /* stacking 컨텍스트 리셋 */
+  z-index: 0;          /* 헤더(1000)보다 낮게 */
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   3) 드롭다운 컨테이너와 메뉴는 헤더 위에 다시 뜨도록
+───────────────────────────────────────────────────────────────────────────── */
+.dropdownContainer {
+  position: relative;  
+  z-index: 1001;       /* 헤더(1000)보다 약간 높게 */
+}
+
+.menu {
+  z-index: 1002 !important;
 }

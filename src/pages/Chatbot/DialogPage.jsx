@@ -47,6 +47,9 @@ export default function DialogPage(props) {
   // ── 추가: IME(조합) 상태 감지 ──
   const [isComposing, setIsComposing] = useState(false);
 
+  // ① 유저가 입력창에 글자를 타이핑 중인지 표시
+  const [isUserTyping, setIsUserTyping] = useState(false);
+
   // ── localStorage에서 메타 정보 불러오기 ──
   useEffect(() => {
     if (!initialName) {
@@ -102,7 +105,8 @@ export default function DialogPage(props) {
   // ── “전송” 버튼 클릭 시 호출 ──
   const handleSend = async () => {
     if (input.trim() === '') return;
-
+    // 유저 입력 중 표시 끄기
+    setIsUserTyping(false);
     setMessages(prev => [...prev, { from: 'user', text: input }]);
     const question = input;
     setInput('');
@@ -197,6 +201,20 @@ export default function DialogPage(props) {
             className={styles.chatList}
             style={{ flex: 1, overflowY: 'auto' }}
           >
+
+            {/*③ 유저가 입력 중이면, 오른쪽에 점 세 개 타이핑 인디케이터*/}
+            {isUserTyping && (
+              <div className={styles.chatMessage} style={{ textAlign: 'right' }}>
+                <span className={styles.userBubble}>
+                  <span className={styles.typingIndicator}>
+                    <span className={styles.dot} />
+                    <span className={styles.dot} />
+                    <span className={styles.dot} />
+                  </span>
+                </span>
+              </div>
+            )}
+
             {messages.map((msg, idx) => (
               <div
                 key={idx}
@@ -229,7 +247,12 @@ export default function DialogPage(props) {
           <div className={styles.inputArea} style={{ flexShrink: 0 }}>
             <input
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => {
+                setInput(e.target.value);
+                setIsUserTyping(e.target.value.length > 0);
+              }}
+              onFocus={() => setIsUserTyping(input.length > 0)}
+              onBlur={() => setIsUserTyping(false)}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               onKeyDown={e => {

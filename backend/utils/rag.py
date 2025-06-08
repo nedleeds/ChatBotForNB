@@ -150,7 +150,7 @@ def generate_mc_questions(index_dir: str, n_questions: int = 5) -> List[MCQItem]
         raise HTTPException(
             status_code=500, detail="MCQ 생성 실패 (잘못된 JSON 응답)"
         ) from e
-        
+
     # 5) 데이터 모델링
     mcqs: List[MCQItem] = []
     for idx, item in enumerate(items, start=1):

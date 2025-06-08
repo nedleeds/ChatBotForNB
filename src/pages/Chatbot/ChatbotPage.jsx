@@ -1,404 +1,240 @@
 // src/pages/Chatbot/ChatbotPage.jsx
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import SelfTestPage from './SelfTestPage';
-import DialogPage from './DialogPage'; // DialogPage import
+import DialogPage from './DialogPage';
+import DropdownWithAdd from '../../components/DropdownWithAdd';
 import styles from './chatbot.module.css';
 
 export default function ChatbotPage() {
   const navigate = useNavigate();
-  const [selfTestBot, setSelfTestBot] = useState(null);
-  // ── 0) 로그인 정보 ──
-  const [loginData, setLoginData] = useState({
-    company: '',
-    team: '',
-    part: '',
-    data: {},
-    employeeID: '',
-    employeeList: [],
-  });
+  const STORAGE_KEY = 'loginData';
 
-  // ── 드롭다운용 회사/팀/파트 리스트 ──
+  const [tree, setTree] = useState([]);             // 전체 트리 (data)
   const [companies, setCompanies] = useState([]);
   const [teams, setTeams] = useState([]);
   const [parts, setParts] = useState([]);
-  const [controlsDisabled, setControlsDisabled] = useState(false);
+  const [employees, setEmployees] = useState([]);
 
-  // ── 사용자가 선택한 회사/팀/파트/사번 ──
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedPart, setSelectedPart] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
 
-  // ── 로컬스토리지 키 ──
-  const STORAGE_KEY = 'loginSelections';
-  // ── 챗봇 메타 저장 키 ──
-  const META_KEY_PREFIX = 'chatbotMeta_'; // e.g. chatbotMeta_HD현대로보틱스_로봇소프트웨어개발팀_공통 지원 SW_영수증
-
-  // ── 학습된 챗봇 목록 ──
   const [chatbots, setChatbots] = useState([]);
-  const [loadingList, setLoadingList] = useState(true);
-
-  // ── 업로드/벡터 생성 중 로딩 스피너 ──
+  const [loadingList, setLoadingList] = useState(false);
   const [loadingTrain, setLoadingTrain] = useState(false);
+  const [activeChatbot, setActiveChatbot] = useState(null);
 
-  // ── 로그 (필요 시) ──
-  const [logs, setLogs] = useState([]);
-  const handleLog = useCallback((event, log) => {
-    if (log && typeof log === 'object' && 'message' in log) {
-      setLogs((prev) => [...prev, log]);
-    }
-  }, []);
-
-  // ── 새 챗봇 생성 모달 ──
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadName, setUploadName] = useState('');
-
-  // ── 숨겨진 파일 입력 ref ──
-  const fileInputRef = useRef(null);
-
-  // ── 1) 로컬스토리지에서 로그인 데이터 복원 ──
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const { company, team, part, employeeID } = JSON.parse(saved);
-        if (company) {
-          setSelectedCompany(company);
-          setCompanies([company]);
-        }
-        if (team) {
-          setSelectedTeam(team);
-          setTeams([team]);
-        }
-        if (part) {
-          setSelectedPart(part);
-          setParts([part]);
-        }
-        if (employeeID) {
-          setSelectedEmployee(employeeID);
-        }
-      } catch {
-        /* JSON parse 오류 무시 */
-      }
-    }
-  }, []);
-
-  // ── 2) 마운트 시 login.json 불러오기(IPC) 및 로그 리스너 등록 ──
-  useEffect(() => {
-    if (window.electronAPI && window.electronAPI.loadLogin) {
-      window.electronAPI.loadLogin().then((data) => {
-        setLoginData(data);
-        const allDataMap = data.data || {};
-        setCompanies(Object.keys(allDataMap));
-
-        if (data.company) setSelectedCompany(data.company);
-        if (data.team) setSelectedTeam(data.team);
-        if (data.part) setSelectedPart(data.part);
-        if (data.employeeID) setSelectedEmployee(data.employeeID);
-
-        if (data.company && allDataMap[data.company]) {
-          setTeams(Object.keys(allDataMap[data.company]));
-        }
-        if (
-          data.company &&
-          data.team &&
-          allDataMap[data.company]?.[data.team]
-        ) {
-          setParts(allDataMap[data.company][data.team]);
-        }
-      });
-    }
-
-    if (
-      window.electronAPI &&
-      window.electronAPI.removeAllTrainChatbotLogListeners
-    ) {
-      window.electronAPI.removeAllTrainChatbotLogListeners();
-    }
-    if (window.electronAPI && window.electronAPI.onTrainChatbotLog) {
-      window.electronAPI.onTrainChatbotLog(handleLog);
-    }
-
-    return () => {
-      if (
-        window.electronAPI &&
-        window.electronAPI.removeAllTrainChatbotLogListeners
-      ) {
-        window.electronAPI.removeAllTrainChatbotLogListeners();
-      }
+  // 1) 로컬스토리지에 저장할 공통 함수
+  const persistLoginData = () => {
+    const payload = {
+      company: selectedCompany,
+      team: selectedTeam,
+      part: selectedPart,
+      employeeID: selectedEmployee,
+      data: tree,
     };
-  }, [handleLog]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  };
 
-  // ── 3) 회사/팀/파트 변경 시 “학습된 챗봇 목록” 재조회 ──
+  const getCompanies = useMemo(
+    () => tree?.map(c => c.name) || [],
+    [tree]
+  );
+  const getTeams = useMemo(
+    () =>
+      tree
+        .find(c => c.name === selectedCompany)
+        ?.teams?.map(t => t.name) || [],
+    [tree, selectedCompany]
+  );
+  const getParts = useMemo(
+    () =>
+      tree
+        .find(c => c.name === selectedCompany)
+        ?.teams?.find(t => t.name === selectedTeam)
+        ?.parts?.map(p => p.name) || [],
+    [tree, selectedCompany, selectedTeam]
+  );
+  const getEmployees = useMemo(
+    () =>
+      tree
+        .find(c => c.name === selectedCompany)
+        ?.teams?.find(t => t.name === selectedTeam)
+        ?.parts?.find(p => p.name === selectedPart)
+        ?.employees || [],
+    [tree, selectedCompany, selectedTeam, selectedPart]
+  );
+
+
+  // ── 1) 마운트 시 로컬스토리지에서 tree(=data)와 선택값 복원 ──
   useEffect(() => {
-    if (selectedCompany && selectedTeam && selectedPart) {
-      fetchChatbotList(selectedCompany, selectedTeam, selectedPart);
-    } else {
-      setLoadingList(false);
-      setChatbots([]);
-    }
-  }, [selectedCompany, selectedTeam, selectedPart]);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const { company, team, part, employeeID, data } = JSON.parse(raw);
+    setTree(data);
 
-  // ── 4) “학습된 챗봇 목록” 조회 (FastAPI GET /chatbots) ──
+    // selected data 값
+    if (company) setSelectedCompany(company);
+    if (team) setSelectedTeam(team);
+    if (part) setSelectedPart(part);
+    if (employeeID) setSelectedEmployee(employeeID);
+  }, []);
+
+  // ── 드롭박스에서 특정값을 선택했을 때 ──
+  const onSelectCompany = name => {
+    setSelectedCompany(name);
+    setSelectedTeam('');
+    setSelectedPart('');
+    setSelectedEmployee('');
+    persistLoginData();
+  };
+  const onSelectTeam = name => {
+    setSelectedTeam(name);
+    setSelectedPart('');
+    setSelectedEmployee('');
+    persistLoginData();
+  };
+  const onSelectPart = name => {
+    setSelectedPart(name);
+    setSelectedEmployee('');
+    persistLoginData();
+  };
+const onSelectEmployee = name => {
+  // 1) state 업데이트
+  setSelectedEmployee(name);
+
+  // 2) 로컬스토리지에 바로 저장 (직접 payload 생성)
+  const payload = {
+    company: selectedCompany,
+    team: selectedTeam,
+    part: selectedPart,
+    employeeID: name,       // ← name을 직접 사용
+    data: tree,             // ← tree도 함께 저장
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+};
+  // ── 챗봇 목록 조회 ──
   const fetchChatbotList = async (company, team, part) => {
     setLoadingList(true);
     try {
       const res = await axios.get('http://localhost:8088/chatbots', {
         params: { company, team, part },
       });
-      // res.data 에 chatbot 객체들이 배열로 들어옴
-      // 여기서 각 객체에 pdf_url이 포함되어 있다고 가정
       setChatbots(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error('FastAPI → 챗봇 목록 조회 중 오류:', err);
+      console.error('챗봇 목록 조회 오류:', err);
       setChatbots([]);
     } finally {
       setLoadingList(false);
     }
   };
 
-  // ── 5) 챗봇 삭제 ──
-  const handleDelete = async (name) => {
-    const confirmed = window.confirm(`"${name}" 챗봇을 정말 삭제하시겠습니까?`);
-    if (!confirmed) return;
-
+  // ── 챗봇 삭제 ──
+  const handleDelete = async (botName) => {
+    if (!window.confirm(`"${botName}" 챗봇을 정말 삭제하시겠습니까?`)) return;
     setLoadingTrain(true);
     try {
-      const res = await axios.delete('http://localhost:8088/chatbots', {
+      await axios.delete('http://localhost:8088/chatbots', {
         params: {
           company: selectedCompany,
           team: selectedTeam,
           part: selectedPart,
-          chatbot_name: name,
+          chatbot_name: botName,
         },
       });
-      console.log('삭제 응답:', res.data);
       await fetchChatbotList(selectedCompany, selectedTeam, selectedPart);
     } catch (err) {
-      console.error('FastAPI → 챗봇 삭제 중 오류:', err);
-      const detail =
-        err.response && err.response.data && err.response.data.detail
-          ? err.response.data.detail
-          : err.message;
-      alert(`❌ 챗봇 삭제에 실패했습니다:\n${detail}`);
+      console.error('삭제 오류:', err);
+      alert('❌ 챗봇 삭제 실패:\n' + (err.message || 'Unknown'));
     } finally {
       setLoadingTrain(false);
     }
   };
 
-  // ── activeChatbot 상태 추가 ──
-  const [activeChatbot, setActiveChatbot] = useState(null);
-
-  // ── 6) “불러오기” 클릭 → DialogPage 보여주기 + PDF URL 메타 저장 ──
-  const handleLoad = async (chatbotObj) => {
-    try {
-      // 회사/팀/파트 정보와 함께 Electron IPC 호출
-      const result = await window.electronAPI.loadChatbot({
+  // ── 챗봇 불러오기 ──
+  const META_KEY_PREFIX = 'chatbotMeta_';
+  const handleLoad = async (c) => {
+    const result = await window.electronAPI.loadChatbot({
+      company: selectedCompany,
+      team: selectedTeam,
+      part: selectedPart,
+      chatbotName: c.name,
+    });
+    if (result.success) {
+      setActiveChatbot(c.name);
+      // 메타 저장
+      const key = `${META_KEY_PREFIX}${selectedCompany}_${selectedTeam}_${selectedPart}_${c.name}`;
+      const meta = {
         company: selectedCompany,
         team: selectedTeam,
         part: selectedPart,
-        chatbotName: chatbotObj.name,
-      });
-      if (result.success) {
-        setActiveChatbot(chatbotObj.name);
-
-        // ── 여기서 “메타데이터”로 pdf_url을 저장 ──
-        // chatbots 배열에 이미 pdf_url 필드가 있다고 가정
-        // 로컬스토리지 키: chatbotMeta_{company}_{team}_{part}_{chatbotName}
-        const metaKey = `${META_KEY_PREFIX}${selectedCompany}_${selectedTeam}_${selectedPart}_${chatbotObj.name}`;
-        const metaValue = {
-          company: selectedCompany,
-          team: selectedTeam,
-          part: selectedPart,
-          chatbotName: chatbotObj.name,
-          pdfUrl: chatbotObj.pdf_url || '',
-          createdAt: chatbotObj.createdAt,
-          lastTrainedAt: chatbotObj.lastTrainedAt,
-        };
-        localStorage.setItem(metaKey, JSON.stringify(metaValue));
-        setControlsDisabled(true);
-      } else {
-        alert('챗봇 불러오기 실패: ' + result.error);
-      }
-    } catch (err) {
-      console.error('챗봇 불러오기 에러:', err);
-      alert('챗봇 불러오기 중 오류가 발생했습니다.');
+        chatbotName: c.name,
+        pdfUrl: c.pdf_url || '',
+        createdAt: c.createdAt,
+        lastTrainedAt: c.lastTrainedAt,
+      };
+      localStorage.setItem(key, JSON.stringify(meta));
+    } else {
+      alert('챗봇 불러오기 실패: ' + result.error);
     }
   };
 
-  // ── 7) “새 챗봇 학습(업로드)” 클릭 ──
+  // ── 새 챗봇 업로드 모달 & 파일 입력 ──
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadName, setUploadName] = useState('');
+  const fileInputRef = useRef(null);
+
   const onClickUpload = () => {
     setUploadName('');
     setShowUploadModal(true);
   };
-
-
-  // ── 8) 이름 입력 “확인” → 파일 선택 다이얼로그 오픈 ──
   const handleUploadConfirm = () => {
-    if (!uploadName.trim()) {
-      alert('챗봇 이름을 입력해주세요.');
-      return;
-    }
+    if (!uploadName.trim()) return alert('챗봇 이름을 입력해주세요.');
     setShowUploadModal(false);
-
     if (!selectedCompany || !selectedTeam || !selectedPart) {
-      alert('회사, 팀, 파트를 먼저 선택해주세요.');
-      return;
+      return alert('회사/팀/파트 먼저 선택해주세요.');
     }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+    fileInputRef.current?.click();
   };
-
-  // ── 9) 파일 선택 후 → FastAPI POST /upload_pdf 호출 ──
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     setLoadingTrain(true);
-    setLogs([]);
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('company', selectedCompany);
-    formData.append('team', selectedTeam);
-    formData.append('part', selectedPart);
-    formData.append('chatbot_name', uploadName.trim());
-
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('company', selectedCompany);
+    fd.append('team', selectedTeam);
+    fd.append('part', selectedPart);
+    fd.append('chatbot_name', uploadName.trim());
     try {
-      await axios.post('http://localhost:8088/upload_pdf', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      await axios.post('http://localhost:8088/upload_pdf', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      alert('✅ 챗봇 업로드 및 벡터 생성 완료');
+      alert('✅ 챗봇 업로드 완료');
       await fetchChatbotList(selectedCompany, selectedTeam, selectedPart);
     } catch (err) {
-      console.error('챗봇 업로드 중 오류:', err);
-      alert('❌ 챗봇 업로드에 실패했습니다. 콘솔을 확인하세요.');
+      console.error('업로드 오류:', err);
+      alert('❌ 업로드 실패');
     } finally {
       setLoadingTrain(false);
       e.target.value = null;
     }
   };
 
-  // ── 10) 이름 모달 “취소” ──
-  const handleUploadCancel = () => {
-    setShowUploadModal(false);
-  };
+  const handleUploadCancel = () => setShowUploadModal(false);
 
-  // ── 11) 드롭다운(회사/팀/파트/사번) 변경 핸들러 ──
-  const onChangeCompany = (e) => {
-    if (controlsDisabled) return;
-    const company = e.target.value;
-    setSelectedCompany(company);
-    setSelectedTeam('');
-    setSelectedPart('');
-    setTeams([]);
-    setParts([]);
-
-    const updated = {
-      ...loginData,
-      company,
-      team: '',
-      part: '',
-      employeeID: selectedEmployee,
-    };
-    window.electronAPI.saveLogin(updated);
-    setLoginData(updated);
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ company, team: '', part: '', employeeID: selectedEmployee })
-    );
-
-    if (loginData.data && loginData.data[company]) {
-      setTeams(Object.keys(loginData.data[company]));
-    }
-  };
-
-  const onChangeTeam = (e) => {
-    if (controlsDisabled) return;
-    const team = e.target.value;
-    setSelectedTeam(team);
-    setSelectedPart('');
-    setParts([]);
-
-    const updated = {
-      ...loginData,
-      company: selectedCompany,
-      team,
-      part: '',
-      employeeID: selectedEmployee,
-    };
-    window.electronAPI.saveLogin(updated);
-    setLoginData(updated);
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ company: selectedCompany, team, part: '', employeeID: selectedEmployee })
-    );
-
-    if (
-      loginData.data &&
-      loginData.data[selectedCompany] &&
-      loginData.data[selectedCompany][team]
-    ) {
-      setParts(loginData.data[selectedCompany][team]);
-    }
-  };
-
-  const onChangePart = (e) => {
-    if (controlsDisabled) return;
-    const part = e.target.value;
-    setSelectedPart(part);
-
-    const updated = {
-      ...loginData,
-      company: selectedCompany,
-      team: selectedTeam,
-      part,
-      employeeID: selectedEmployee,
-    };
-    window.electronAPI.saveLogin(updated);
-    setLoginData(updated);
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ company: selectedCompany, team: selectedTeam, part, employeeID: selectedEmployee })
-    );
-  };
-
-  // ── 12) 로그아웃 ──
-  const handleLogout = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    const cleared = {
-      ...loginData,
-      company: '',
-      team: '',
-      part: '',
-      employeeID: '',
-    };
-    window.electronAPI.saveLogin(cleared);
-    navigate('/login');
-  };
-
-  // ── Debug: DialogPage에 넘길 값들을 여기서도 확인 ──
+  // ── 3) 마운트 후, 선택된 값이 있으면 자동 목록 조회 ──
   useEffect(() => {
-    if (activeChatbot) {
-      console.log('DialogPage에 넘길 값들:', {
-        selectedCompany,
-        selectedTeam,
-        selectedPart,
-        activeChatbot,
-        // chatbots 배열이 업데이트될 때마다 확인
-      });
+    if (selectedCompany && selectedTeam && selectedPart) {
+      fetchChatbotList(selectedCompany, selectedTeam, selectedPart);
     }
-  }, [activeChatbot, selectedCompany, selectedTeam, selectedPart, chatbots]);
+  }, [selectedCompany, selectedTeam, selectedPart]);
 
-  // ── 렌더링 ──
   return (
     <div className={styles.container}>
-      {/* ── 스피너 오버레이 (loadingTrain === true일 때만 표시) ── */}
+      {/* ── 업로드/벡터 생성 스피너 ── */}
       {loadingTrain && (
         <div className={styles.spinnerOverlay}>
           <div className={styles.spinner} />
@@ -408,82 +244,22 @@ export default function ChatbotPage() {
         </div>
       )}
 
-      {/* ── 상단 헤더 ── */}
+      {/* ── 헤더 ── */}
       <header className={styles.header}>
-        <div className={styles.fieldsRow}>
-          {/* 회사 선택 */}
-          <select
-            className={styles.darkSelect}
-            value={selectedCompany}
-            onChange={onChangeCompany}
-            disabled={controlsDisabled}
-          >
-            <option value="" disabled>
-              회사 선택
-            </option>
-            {companies.map((comp) => (
-              <option key={comp} value={comp}>
-                {comp}
-              </option>
-            ))}
-          </select>
-
-          {/* 팀 선택 */}
-          <select
-            className={styles.darkSelect}
-            value={selectedTeam}
-            onChange={onChangeTeam}
-            disabled={controlsDisabled}
-          >
-            <option value="" disabled>
-              팀 선택
-            </option>
-            {teams.map((team) => (
-              <option key={team} value={team}>
-                {team}
-              </option>
-            ))}
-          </select>
-
-          {/* 파트 선택 */}
-          <select
-            className={styles.darkSelect}
-            value={selectedPart}
-            onChange={onChangePart}
-            disabled={controlsDisabled}
-          >
-            <option value="" disabled>
-              파트 선택
-            </option>
-            {parts.map((part) => (
-              <option key={part} value={part}>
-                {part}
-              </option>
-            ))}
-          </select>
-
-          {/* 사번 읽기 전용 박스 */}
-          <div className={styles.employeeBox}>
-            {selectedEmployee || '사번 없음'}
-          </div>
-
-          {/* 로그아웃 버튼 */}
-          <button className={styles.logoutBtn} onClick={handleLogout}>
-            로그아웃
-          </button>
+        <div className={styles.dropdownGroup}>
+          <DropdownWithAdd items={getCompanies} selected={selectedCompany} onSelect={onSelectCompany} disabled={false} />
+          <DropdownWithAdd items={getTeams} selected={selectedTeam} onSelect={onSelectTeam} disabled={false} />
+          <DropdownWithAdd items={getParts} selected={selectedPart} onSelect={onSelectPart} disabled={false} />
+          <DropdownWithAdd items={getEmployees} selected={selectedEmployee} onSelect={onSelectEmployee} disabled={false} />
         </div>
+        <button className={styles.logoutBtn} onClick={() => { navigate('/login'); }}>로그아웃</button>
       </header>
-
-      {/* ── 본문: 챗봇 영역 ── */}
+      {/* ── 본문 ── */}
       <main className={styles.chatbotBody}>
         {activeChatbot ? (
-          // DialogPage에 필요한 모든 prop을 전달하도록 수정
+          // DialogPage 렌더링
           (() => {
-            // 현재 activeChatbot 이름과 일치하는 메타를 chatbots 배열에서 찾음
-            const matched = chatbots.find((c) => c.name === activeChatbot) || {};
-            // 디버깅: matched 값 확인
-            console.log('DialogPage용 메타:', matched);
-
+            const matched = chatbots.find(c => c.name === activeChatbot) || {};
             return (
               <DialogPage
                 company={selectedCompany}
@@ -493,23 +269,19 @@ export default function ChatbotPage() {
                 createdAt={matched.createdAt}
                 pdfUrl={`http://localhost:8088${matched.pdf_url}`}
                 lastTrainedAt={matched.lastTrainedAt}
-                onClose={() => {
-                  setActiveChatbot(null);
-                  setControlsDisabled(false);
-                }}
+                onClose={() => setActiveChatbot(null)}
               />
             );
           })()
         ) : (
           <section className={styles.chatbotContent}>
-            {/* ── 학습된 챗봇이 있을 때 ── */}
+            {/* 챗봇 카드 리스트 */}
             {!loadingTrain && !loadingList && chatbots.length > 0 && (
               <>
                 <h3 className={styles.subheading}>저장된 챗봇 목록</h3>
                 <div className={styles.chatbotListContainer}>
-                  {chatbots.map((c) => (
+                  {chatbots.map(c => (
                     <div key={c.name} className={styles.chatbotCard}>
-                      {/* 삭제 버튼 */}
                       <button
                         className={styles.deleteButton}
                         onClick={() => handleDelete(c.name)}
@@ -517,48 +289,33 @@ export default function ChatbotPage() {
                       >
                         🗑️
                       </button>
-
                       <div className={styles.cardHeader}>
                         <span className={styles.chatbotName}>{c.name}</span>
                       </div>
                       <div className={styles.cardMeta}>
-                        <div>
-                          <strong>마지막 학습:</strong>{' '}
-                          {(() => {
-                            const d = new Date(c.lastTrainedAt);
-                            const yy = String(d.getFullYear()).slice(2);
-                            const mm = String(d.getMonth() + 1).padStart(2, '0');
-                            const dd = String(d.getDate()).padStart(2, '0');
-                            const rawHour = d.getHours();
-                            const ampm = rawHour < 12 ? 'AM' : 'PM';
-                            const hour12 = String(rawHour % 12 || 12).padStart(2, '0');
-                            const mi = String(d.getMinutes()).padStart(2, '0');
-
-                            return `${yy}:${mm}:${dd} ${hour12}:${mi} ${ampm}`;
-                          })()}
-                        </div>
+                        <strong>마지막 학습:</strong>{' '}
+                        {new Date(c.lastTrainedAt).toLocaleString()}
                       </div>
                       <div className={styles.cardActions}>
-                        {/* 불러오기 버튼 (DialogPage 표시) */}
                         <button
                           className={styles.loadButton}
                           onClick={() => handleLoad(c)}
                         >
                           불러오기
                         </button>
-
-                        {/* 자가평가 버튼 */}
                         <button
                           className={styles.retrainButton}
-                          onClick={() => navigate('/self-test', {
-                            state: {
-                              company: loginData.company,
-                              team: loginData.team,
-                              part: loginData.part,
-                              chatbotName: c.name,
-                              evaluatorID: loginData.employeeID,
-                            }
-                          })}
+                          onClick={() =>
+                            navigate('/self-test', {
+                              state: {
+                                company: selectedCompany,
+                                team: selectedTeam,
+                                part: selectedPart,
+                                chatbotName: c.name,
+                                evaluatorID: selectedEmployee,
+                              }
+                            })
+                          }
                         >
                           자가평가
                         </button>
@@ -566,8 +323,6 @@ export default function ChatbotPage() {
                     </div>
                   ))}
                 </div>
-
-                {/* 업로드 버튼 */}
                 <button
                   className={styles.uploadBtn}
                   onClick={onClickUpload}
@@ -578,7 +333,7 @@ export default function ChatbotPage() {
               </>
             )}
 
-            {/* ── 학습된 챗봇이 하나도 없을 때 ── */}
+            {/* 챗봇이 없을 때 */}
             {!loadingTrain && !loadingList && chatbots.length === 0 && (
               <div className={styles.noChatbotContainer}>
                 <p className={styles.noChatbotMessage}>
@@ -596,7 +351,7 @@ export default function ChatbotPage() {
               </div>
             )}
 
-            {/* ── 챗봇 목록 로딩 중 ── */}
+            {/* 로딩 중 */}
             {!loadingTrain && loadingList && (
               <div className={styles.loadingText}>
                 챗봇 목록을 불러오는 중...
@@ -606,38 +361,28 @@ export default function ChatbotPage() {
         )}
       </main>
 
-      {/* ── 이름 입력 모달 ── */}
+      {/* 업로드 모달 */}
       {showUploadModal && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalContent}>
-            <h3>새 챗봇 이름을 입력해주세요</h3>
+            <h3>새 챗봇 이름 입력</h3>
             <input
               type="text"
               value={uploadName}
-              onChange={(e) => setUploadName(e.target.value)}
-              className={styles.nameInput}
+              onChange={e => setUploadName(e.target.value)}
               placeholder="예: 나의 첫 챗봇"
             />
             <div className={styles.modalButtons}>
-              <button
-                onClick={handleUploadConfirm}
-                className={styles.confirmButton}
-                disabled={!uploadName.trim()}
-              >
+              <button onClick={handleUploadConfirm} disabled={!uploadName.trim()}>
                 확인
               </button>
-              <button
-                onClick={handleUploadCancel}
-                className={styles.cancelButton}
-              >
-                취소
-              </button>
+              <button onClick={handleUploadCancel}>취소</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── 숨겨진 파일 입력 (PDF 업로드용) ── */}
+      {/* 숨겨진 파일 입력 */}
       <input
         type="file"
         accept=".pdf"

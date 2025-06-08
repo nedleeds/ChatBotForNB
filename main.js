@@ -4,8 +4,10 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const { spawn } = require('child_process');
+const axios = require('axios');
 
 let mainWindow;
+const API_BASE = 'http://127.0.0.1:8088/api';
 
 /** ─────────────────────────────────────────────────────────────────────────────
  * 1. 앱 전용 데이터 디렉토리 및 JSON 파일 경로 정의
@@ -68,6 +70,49 @@ ipcMain.handle('login:save', async (event, newLoginData) => {
   }
 });
 
+// 회사 추가
+ipcMain.handle('add:company', async (_evt, name) => {
+  return axios.post(`${API_BASE}/company`, { company: name }).then(r => r.data);
+});
+
+// 팀 추가
+ipcMain.handle('add:team', async (_evt, { company, team }) => {
+  return axios.post(`${API_BASE}/team`, { company, team }).then(r => r.data);
+});
+
+// 파트 추가
+ipcMain.handle('add:part', async (_evt, { company, team, part }) => {
+  return axios.post(`${API_BASE}/part`, { company, team, part }).then(r => r.data);
+});
+
+ipcMain.handle('login:search', async (event, { company = '', team = '', part = '', employeeID = '' }) => {
+  // FastAPI /api/login 엔드포인트 호출
+  const qs = new URLSearchParams({ company, team, part, employeeID }).toString();
+  const url = `${API_BASE}/login?${qs}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error('❌ login:search 에러:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle('login:submit', async (event, { company, team, part, employeeID }) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/login`,
+      { company, team, part, employeeID }
+    );
+    return response.data;
+  } catch (err) {
+    console.error('FastAPI /api/login 호출 실패:', err);
+    // 렌더러로 에러를 던집니다.
+    throw err;
+  }
+});
+
 /** ─────────────────────────────────────────────────────────────────────────────
  * 4. 챗봇 메타데이터 파일 초기화/관리
  * ───────────────────────────────────────────────────────────────────────────── */
@@ -95,31 +140,6 @@ async function readChatbotList() {
   }
 }
 
-// 4-3. 새로운 챗봇 메타데이터를 추가하고 JSON 파일 업데이트
-async function addNewChatbot(meta) {
-  const list = await readChatbotList();
-  list.push(meta);
-  await fsPromises.writeFile(chatbotMetaPath, JSON.stringify(list, null, 2), 'utf-8');
-  return meta;
-}
-
-// 4-4. 기존 챗봇 메타데이터 수정 (재학습 시 lastTrainedAt 업데이트)
-async function updateChatbotMeta(name, newFields) {
-  const list = await readChatbotList();
-  const idx = list.findIndex((c) => c.name === name);
-  if (idx === -1) throw new Error('해당 챗봇을 찾을 수 없습니다.');
-  list[idx] = { ...list[idx], ...newFields };
-  await fsPromises.writeFile(chatbotMetaPath, JSON.stringify(list, null, 2), 'utf-8');
-  return list[idx];
-}
-
-// 4-5. 챗봇 메타데이터에서 하나를 삭제
-async function removeChatbotMeta(name) {
-  const list = await readChatbotList();
-  const filtered = list.filter((c) => c.name !== name);
-  await fsPromises.writeFile(chatbotMetaPath, JSON.stringify(filtered, null, 2), 'utf-8');
-  return filtered;
-}
 
 /** ─────────────────────────────────────────────────────────────────────────────
  * 5. Electron 윈도우 생성 함수

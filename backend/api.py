@@ -30,6 +30,197 @@ data_dir = os.path.join(base_dir, "data")
 app.mount("/static", StaticFiles(directory=data_dir), name="static")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 로그인 옵션 제공 모델 및 엔드포인트
+# ─────────────────────────────────────────────────────────────────────────────
+class CompanyCreate(BaseModel):
+    company: str
+
+
+class TeamCreate(BaseModel):
+    company: str
+    team: str
+
+
+class PartCreate(BaseModel):
+    company: str
+    team: str
+    part: str
+
+
+class PartOption(BaseModel):
+    name: str
+    # (필요하면) 이 파트에 속한 사번 목록까지 포함
+    employees: List[str] = []
+
+
+class TeamOption(BaseModel):
+    name: str
+    parts: List[PartOption]
+
+
+class CompanyOption(BaseModel):
+    name: str
+    teams: List[TeamOption]
+
+
+class LoginOptions(BaseModel):
+    companies: List[CompanyOption]
+
+
+class CurrentLoginInfo(BaseModel):
+    company: Optional[str] = None
+    team: Optional[str] = None
+    part: Optional[str] = None
+    employeeID: Optional[str] = None
+
+
+class LoginResponse(BaseModel):
+    companies: List[str]
+    teams: List[str]
+    parts: List[str]
+    employees: List[str]
+
+
+def ensure_dir(path: str):
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError as e:
+        raise HTTPException(500, f"디렉터리 생성 실패: {e}")
+
+
+def scan_subdirs(dir_path):
+    """dir_path 아래의 하위 디렉터리 이름 목록 반환"""
+    if not os.path.isdir(dir_path):
+        return []
+    return [
+        name
+        for name in os.listdir(dir_path)
+        if os.path.isdir(os.path.join(dir_path, name))
+    ]
+
+
+def list_subdirs(path: str) -> List[str]:
+    if not os.path.isdir(path):
+        return []
+    return [
+        name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))
+    ]
+
+
+def load_employees(part_dir):
+    """part_dir/employees.json 파일이 있으면 리스트로 로드, 아니면 빈 리스트"""
+    emp_file = os.path.join(part_dir, "employees.json")
+    if not os.path.isfile(emp_file):
+        return []
+    try:
+        with open(emp_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def init_employees_file(part_dir: str):
+    emp_file = os.path.join(part_dir, "employees.json")
+    if not os.path.exists(emp_file):
+        with open(emp_file, "w", encoding="utf-8") as f:
+            json.dump([], f, ensure_ascii=False)
+
+
+@app.get("/api/login", response_model=LoginOptions)
+def get_login_options():
+    companies: List[CompanyOption] = []
+
+    # data/ 아래에서 회사 디렉터리 반복
+    for comp_name in scan_subdirs(data_dir):
+        comp_dir = os.path.join(data_dir, comp_name)
+
+        teams: List[TeamOption] = []
+        for team_name in scan_subdirs(comp_dir):
+            team_dir = os.path.join(comp_dir, team_name)
+
+            parts: List[PartOption] = []
+            for part_name in scan_subdirs(team_dir):
+                part_dir = os.path.join(team_dir, part_name)
+                # employees.json 읽어서 리스트로
+                emp_list = load_employees(part_dir)
+                parts.append(PartOption(name=part_name, employees=emp_list))
+
+            teams.append(TeamOption(name=team_name, parts=parts))
+
+        companies.append(CompanyOption(name=comp_name, teams=teams))
+
+    return LoginOptions(companies=companies)
+
+
+@app.post("/api/login")
+async def add_employee(info: CurrentLoginInfo):
+    """
+    company/team/part 경로 아래에 employees.json을 만들고,
+    중복 없이 employeeID를 추가합니다.
+    """
+    target_dir = os.path.join(data_dir, info.company, info.team, info.part)
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"디렉터리 생성 실패: {e}")
+
+# 3) employees.json 읽고, 없으면 새로 만들고, 중복 없이 추가
+    emp_file = os.path.join(target_dir, "employees.json")
+    if os.path.isfile(emp_file):
+        try:
+            with open(emp_file, "r", encoding="utf-8") as f:
+                employees = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            employees = []
+    else:
+        employees = []
+
+    if info.employeeID not in employees:
+        employees.append(info.employeeID)
+        try:
+            with open(emp_file, "w", encoding="utf-8") as f:
+                json.dump(employees, f, ensure_ascii=False, indent=2)
+        except IOError as e:
+            raise HTTPException(status_code=500, detail=f"employees.json 쓰기 실패: {e}")
+
+    return {"status": "ok", "employees": employees}
+
+@app.post("/api/company")
+def add_company(info: CompanyCreate):
+    global data_dir
+    comp_dir = os.path.join(data_dir, info.company)
+    ensure_dir(comp_dir)
+    # 성공 시 회사 목록 반환
+    return {"status": "ok", "companies": list_subdirs(data_dir)}
+
+
+@app.post("/api/team")
+def add_team(info: TeamCreate):
+    global data_dir
+    comp_dir = os.path.join(data_dir, info.company)
+    if not os.path.isdir(comp_dir):
+        raise HTTPException(404, f"회사 '{info.company}'를 찾을 수 없습니다.")
+    team_dir = os.path.join(comp_dir, info.team)
+    ensure_dir(team_dir)
+    return {"status": "ok", "teams": list_subdirs(comp_dir)}
+
+
+@app.post("/api/part")
+def add_part(info: PartCreate):
+    global data_dir
+    team_dir = os.path.join(data_dir, info.company, info.team)
+    if not os.path.isdir(team_dir):
+        raise HTTPException(
+            404, f"회사/팀 '{info.company}/{info.team}'를 찾을 수 없습니다."
+        )
+    part_dir = os.path.join(team_dir, info.part)
+    ensure_dir(part_dir)
+    init_employees_file(part_dir)
+    return {"status": "ok", "parts": list_subdirs(team_dir)}
+
+
 # QnA 스키마
 class QuestionModel(BaseModel):
     id: Optional[int] = None
